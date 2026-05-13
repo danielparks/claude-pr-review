@@ -8,12 +8,12 @@ inputs:
     description: Prompt when no prior Claude review exists
     required: true
   re-review-prompt:
-    description: Prompt when a prior Claude review exists or the diff has changed
+    description: Prompt when a prior Claude review exists
     required: true
   bot-username:
     description: GitHub username of the bot, used to detect prior reviews
     required: false
-    default: claude[bot]
+    default: claude
   anthropic-api-key:
     description: Anthropic API key
     required: false
@@ -59,7 +59,6 @@ runs:
 
     - name: Restore diff cache
       id: cache-restore
-      if: github.event.action == 'synchronize'
       uses: actions/cache/restore@v4
       with:
         path: .pr-cache
@@ -69,7 +68,6 @@ runs:
 
     - name: Compute and compare diffs
       id: diff
-      if: github.event.action == 'synchronize'
       shell: bash
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -80,20 +78,23 @@ runs:
         fi
 
         mkdir -p .pr-cache
-        # Strip @@ hunk headers (line numbers) and index lines (base blob SHAs)
-        # so that a clean rebase produces an identical diff.
+        # Remove line numbers from @@ hunk headers and delete index lines (base
+        # blob SHAs) so that a clean rebase produces an identical diff.
         git diff "${BASE_SHA}..${HEAD_SHA}" \
-          | grep -vE '^(@@|index )' \
+          | grep -v '^index ' \
+          | sed -e 's/^@@.*@@/@@ - - @@/' \
           > .pr-cache/new-diff.txt
 
         if [ -f .pr-cache/prev-diff.txt ]; then
-          if diff -q .pr-cache/prev-diff.txt .pr-cache/new-diff.txt > /dev/null 2>&1; then
+          if diff .pr-cache/prev-diff.txt .pr-cache/new-diff.txt >/dev/null ; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            DIFF_OF_DIFFS=$(diff .pr-cache/prev-diff.txt .pr-cache/new-diff.txt || true)
             {
               echo "diff_section<<ENDSECTION"
-              printf 'CHANGES SINCE LAST REVIEW:\n```\n%s\n```\n' "$DIFF_OF_DIFFS"
+              echo '## Changes since last review'
+              echo '```'
+              diff .pr-cache/prev-diff.txt .pr-cache/new-diff.txt || true
+              echo '```'
               echo "ENDSECTION"
             } >> "$GITHUB_OUTPUT"
           fi
@@ -102,7 +103,6 @@ runs:
         cp .pr-cache/new-diff.txt .pr-cache/prev-diff.txt
 
     - name: Save diff cache
-      if: github.event.action == 'synchronize'
       uses: actions/cache/save@v4
       with:
         path: .pr-cache
@@ -134,21 +134,15 @@ runs:
         RE_REVIEW_PROMPT: ${{ inputs.re-review-prompt }}
         PR_CONTEXT: ${{ steps.render.outputs.pr_context }}
       run: |
-        if echo "$PR_CONTEXT" | grep -qF "$BOT_USERNAME"; then
-          {
-            echo "prompt<<EOF"
-            printf '%s' "$RE_REVIEW_PROMPT"
-            echo
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-        else
-          {
-            echo "prompt<<EOF"
-            printf '%s' "$INITIAL_PROMPT"
-            echo
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-        fi
+        {
+          echo "prompt<<EOF"
+          if echo "$PR_CONTEXT" | grep "^### Comment by " | grep -qF " $BOT_USERNAME "; then
+            printf '%s\n' "$RE_REVIEW_PROMPT"
+          else
+            printf '%s\n' "$INITIAL_PROMPT"
+          fi
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
 
     # WARNING: action is not pinned to a SHA here
     - uses: anthropics/claude-code-action@v1
