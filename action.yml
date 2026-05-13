@@ -54,8 +54,12 @@ runs:
       env:
         ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
       run: |
-        TOOLS=$(echo "$ALLOWED_TOOLS" | grep -v '^[[:space:]]*$' | tr '\n' ',' | sed 's/,$//')
-        echo "list=$TOOLS" >> "$GITHUB_OUTPUT"
+        echo "list=$(
+          echo "$ALLOWED_TOOLS" \
+            | grep -v '^[[:space:]]*$' \
+            | tr '\n' ',' \
+            | sed 's/,$//' \
+          )" >> "$GITHUB_OUTPUT"
 
     - name: Restore diff cache
       id: cache-restore
