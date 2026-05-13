@@ -21,6 +21,11 @@ jobs:
       issues: write
       actions: read
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
       # WARNING: action is not pinned to a SHA here
       - uses: danielparks/claude-pr-review@v1
         with:

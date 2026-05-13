@@ -44,10 +44,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 2
-
     - name: Build allowed-tools list
       id: tools
       shell: bash
