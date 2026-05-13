@@ -83,24 +83,24 @@ runs:
         git diff "${BASE_SHA}..${HEAD_SHA}" \
           | grep -v '^index ' \
           | sed -e 's/^@@.*@@/@@ - - @@/' \
-          > .pr-cache/new-diff.txt
+          > .pr-cache/new.patch
 
-        if [ -f .pr-cache/prev-diff.txt ]; then
-          if diff .pr-cache/prev-diff.txt .pr-cache/new-diff.txt >/dev/null ; then
+        if [ -f .pr-cache/prev.patch ]; then
+          if diff .pr-cache/prev.patch .pr-cache/new.patch >/dev/null ; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             {
               echo "diff_section<<ENDSECTION"
               echo '## Changes since last review'
               echo '```'
-              diff .pr-cache/prev-diff.txt .pr-cache/new-diff.txt || true
+              diff .pr-cache/prev.patch .pr-cache/new.patch || true
               echo '```'
               echo "ENDSECTION"
             } >> "$GITHUB_OUTPUT"
           fi
         fi
 
-        cp .pr-cache/new-diff.txt .pr-cache/prev-diff.txt
+        cp .pr-cache/new.patch .pr-cache/prev.patch
 
     - name: Save diff cache
       uses: actions/cache/save@v4
