@@ -1,4 +1,4 @@
-# DANGER: see the WARNINGs in this file before enabling this workflow.
+# DANGER: see the WARNING comments in this file before enabling this workflow.
 
 name: Claude
 on:
