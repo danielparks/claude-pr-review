@@ -1,0 +1,56 @@
+# WARNING: These triggers allow collaborators to ping @claude on third party PRs
+# and issues without any other protection against prompt injection. If you do
+# not trust your collaborators to be extremely careful, then do not use this!
+
+# WARNING: This assumes that anybody who can assign issues is trusted.
+
+name: Claude
+on:
+  issues:
+    types: [opened, edited, assigned]
+  issue_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+
+jobs:
+  respond:
+    if: |
+      (
+        contains(
+          fromJSON('["OWNER", "COLLABORATOR"]'),
+          github.event.issue.author_association ||
+          github.event.comment.author_association ||
+          github.event.review.author_association
+        ) &&
+        (
+          contains(github.event.issue.body, '@claude') ||
+          contains(github.event.issue.title, '@claude') ||
+          contains(github.event.comment.body, '@claude') ||
+          contains(github.event.review.body, '@claude')
+        )
+      ) ||
+      (
+        github.event_name == 'issues' &&
+        github.event.action == 'assigned' &&
+        github.event.assignee.login == 'claude[bot]'
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # WARNING: action is not pinned to a SHA here
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
