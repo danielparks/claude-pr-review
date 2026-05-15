@@ -59,7 +59,7 @@ runs:
 
     - name: Restore diff cache
       id: cache-restore
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: .pr-cache
         key: pr-diff-${{ github.event.pull_request.number }}-${{ github.run_id }}
@@ -111,7 +111,7 @@ runs:
         cp .pr-cache/new.patch .pr-cache/prev.patch
 
     - name: Save diff cache
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: .pr-cache
         key: pr-diff-${{ github.event.pull_request.number }}-${{ github.run_id }}
@@ -152,8 +152,7 @@ runs:
           echo "EOF"
         } >> "$GITHUB_OUTPUT"
 
-    # WARNING: action is not pinned to a SHA here
-    - uses: anthropics/claude-code-action@v1
+    - uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e # v1.0.123
       if: steps.diff.outputs.skip != 'true'
       with:
         anthropic_api_key: ${{ inputs.anthropic-api-key }}
