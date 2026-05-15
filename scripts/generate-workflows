@@ -1,64 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(git -C "${BASH_SOURCE[0]%/*}" rev-parse --show-toplevel)"
+cd "$(dirname "$0")/.."
 
 usage() {
   cat >&2 <<EOF
-Usage: ${0##*/} [<owner/repo>]
+Usage: ${0##*/}
 
-Pin the action reference in workflow-*.yaml to the last git tag and
-generate .github/workflows/ from the updated examples.
-
-owner/repo defaults to the GitHub repo inferred from the origin remote.
+Generate .github/workflows/ from examples.
 EOF
 }
+
+REPO=danielparks/claude-pr-review
 
 if [[ ${1:-} == --help ]]; then
   usage; exit 0
 fi
-
-# Determine owner/repo.
-if [[ $# -ge 1 ]]; then
-  REPO=$1
-else
-  REMOTE_URL=$(git remote get-url origin 2>/dev/null) || {
-    echo "error: no origin remote — pass owner/repo as an argument" >&2
-    exit 1
-  }
-  REPO=$(printf '%s' "$REMOTE_URL" | sed 's|.*github\.com[:/]\(.*\)|\1|; s|\.git$||')
-fi
-
-# Get the last tag and its full SHA.
-TAG=$(git tag --sort=-version:refname | head -1)
-if [[ -z $TAG ]]; then
-  echo "error: no tags found — create a release tag first" >&2
-  exit 1
-fi
-SHA=$(git rev-list -n 1 "$TAG")
-
-echo "Pinning $REPO to $SHA ($TAG)"
-
-# Update example workflows to reference the last release. Uses temp files
-# for sed portability (macOS vs Linux differ on sed -i).
-for EXAMPLE in workflow-*.yaml; do
-  TMP=$(mktemp)
-  sed \
-    -e '/^[[:space:]]*# WARNING: action is not pinned to a SHA here$/d' \
-    -e "s|uses: ${REPO}@.*|uses: ${REPO}@${SHA} # ${TAG}|" \
-    "$EXAMPLE" > "$TMP"
-  mv "$TMP" "$EXAMPLE"
-  echo "Updated $EXAMPLE"
-done
 
 # Generate .github/workflows/ from the updated examples, replacing the
 # owner/repo reference with ./ for self-testing.
 mkdir -p .github/workflows
 for EXAMPLE in workflow-*.yaml; do
   NAME="${EXAMPLE#workflow-}"
-  OUT=".github/workflows/$NAME"
+  OUT=".github/workflows/claude-$NAME"
   {
-    printf '# Generated from %s — do not edit directly.\n' "$EXAMPLE"
+    echo "# Generated from $EXAMPLE — do not edit directly."
+    echo
     sed "s|uses: ${REPO}@.*|uses: ./|" "$EXAMPLE"
   } > "$OUT"
 done

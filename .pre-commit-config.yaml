@@ -32,3 +32,10 @@ repos:
         pass_filenames: true
         types: [javascript, json, markdown, yaml]
         stages: [pre-commit, pre-merge-commit]
+      - id: generate-workflows
+        name: generate-workflows
+        language: system
+        entry: scripts/generate-workflows
+        pass_filenames: false
+        files: ^workflow-.*\.yaml$|^scripts/generate-workflows$
+        stages: [pre-commit, pre-merge-commit]
