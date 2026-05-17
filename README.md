@@ -54,7 +54,6 @@ When a PR is updated this compares the version of the PR to the new version. If 
 
 If the changes are not identical then this provides Claude with a diff-of-diffs so that it can see what was changed.
 
-
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
 [workflow-review.yaml]: workflow-review.yaml
 [workflow-response.yaml]: workflow-response.yaml

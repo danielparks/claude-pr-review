@@ -27,7 +27,7 @@ echo "Pinning $REPO to $SHA ($REF)  # $COMMENT"
 # temp files for sed portability (macOS vs Linux differ on sed -i).
 for EXAMPLE in README.md workflow-*.yaml; do
   TMP=$(mktemp ".$EXAMPLE.temp.XXXXX")
-  sed -e "s|uses: ${REPO}@.*|uses: ${REPO}@${SHA}  # ${COMMENT}|" \
+  sed -e "s|uses: ${REPO}@.*|uses: ${REPO}@${SHA} # ${COMMENT}|" \
     "$EXAMPLE" > "$TMP"
   mv "$TMP" "$EXAMPLE"
   echo "Updated $EXAMPLE"
