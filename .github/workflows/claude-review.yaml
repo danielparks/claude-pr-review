@@ -31,8 +31,8 @@ jobs:
         with:
           # You can set either of these secrets. If both are set, the API key
           # seems to win.
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           initial-review-prompt: |
             Please review this pull request. The PR branch is already checked
             out in the current working directory, and the PR discussion is
