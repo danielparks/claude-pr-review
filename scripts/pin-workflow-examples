@@ -23,9 +23,9 @@ SHA=$(git rev-parse "$REF")
 
 echo "Pinning $REPO to $SHA ($REF)  # $COMMENT"
 
-# Update example workflows to reference the last release. Uses temp files
-# for sed portability (macOS vs Linux differ on sed -i).
-for EXAMPLE in workflow-*.yaml; do
+# Update example workflows and README.md to reference the last release. Uses
+# temp files for sed portability (macOS vs Linux differ on sed -i).
+for EXAMPLE in README.md workflow-*.yaml; do
   TMP=$(mktemp ".$EXAMPLE.temp.XXXXX")
   sed -e "s|uses: ${REPO}@.*|uses: ${REPO}@${SHA}  # ${COMMENT}|" \
     "$EXAMPLE" > "$TMP"
