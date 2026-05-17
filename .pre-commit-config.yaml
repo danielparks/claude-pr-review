@@ -30,7 +30,7 @@ repos:
         language: system
         entry: npx prettier --check
         pass_filenames: true
-        types: [javascript, json, markdown, yaml]
+        types_or: [javascript, json, markdown, yaml]
         stages: [pre-commit, pre-merge-commit]
       - id: generate-workflows
         name: generate-workflows
@@ -51,7 +51,7 @@ repos:
         language: system
         entry: actionlint
         pass_filenames: true
-        types: [yaml]
+        types_or: [yaml]
         files: ^workflow-
         stages: [pre-commit, pre-merge-commit]
       - id: ghalint workflow
@@ -59,7 +59,7 @@ repos:
         language: system
         entry: ghalint run
         pass_filenames: true
-        types: [yaml]
+        types_or: [yaml]
         files: ^workflow-
         stages: [pre-commit, pre-merge-commit]
       - id: ghalint action
@@ -67,6 +67,6 @@ repos:
         language: system
         entry: ghalint run-action
         pass_filenames: true
-        types: [yaml]
-        files: ^action\.yml$
+        types_or: [yaml]
+        files: ^action\.yaml$
         stages: [pre-commit, pre-merge-commit]
