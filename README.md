@@ -7,7 +7,7 @@ This also makes Claude smarter about re-reviewing updated PRs.
 ## Quick start
 
 ```yaml
-- uses: danielparks/claude-pr-review@19252e4d805e7d27912eff2e57c2c6c56b6074ed # HEAD
+- uses: danielparks/claude-pr-review@ffaeedbea7afa69130f673fe7f7b4b14e1643732 # HEAD
   with:
     # You can set either of these secrets. If both are set, the API key
     # seems to win.
