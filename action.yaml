@@ -72,24 +72,28 @@ runs:
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        REPO: "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+        REPO: ${{ github.repository }}
+        REPO_URL: "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
       run: |
-        # Fetch commits; compare changes to PR
+        # Get the merge base SHA from the API, then fetch and diff locally.
+        # Using the merge base (rather than BASE_SHA) ensures we only diff
+        # what the PR author changed, excluding commits pushed to the base
+        # branch after this branch was created.
+        MERGE_BASE=$(gh api "repos/$REPO/compare/${BASE_SHA}...${HEAD_SHA}" \
+          --jq '.merge_base_commit.sha')
 
-        # fetch-depth: 2 is sufficient (base and head are parents of the merge
-        # commit), but fall back to targeted fetches in case the caller used
-        # a shallower clone.
-        if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-          git fetch --depth=1 "$REPO" "$BASE_SHA"
+        if ! git cat-file -e "${MERGE_BASE}^{commit}" 2>/dev/null; then
+          git fetch --depth=1 "$REPO_URL" "$MERGE_BASE"
         fi
         if ! git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
-          git fetch --depth=1 "$REPO" "$HEAD_SHA"
+          git fetch --depth=1 "$REPO_URL" "$HEAD_SHA"
         fi
 
         mkdir -p .pr-cache
         # Remove line numbers from @@ hunk headers and delete index lines (base
         # blob SHAs) so that a clean rebase produces an identical diff.
-        git diff "${BASE_SHA}..${HEAD_SHA}" \
+        # Note: binary files are excluded from the diff and won't be reviewed.
+        git diff "${MERGE_BASE}..${HEAD_SHA}" \
           | grep -v '^index ' \
           | sed -e 's/^@@.*@@/@@ - - @@/' \
           > .pr-cache/new.patch
