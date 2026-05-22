@@ -82,6 +82,10 @@ runs:
         # branch after this branch was created.
         MERGE_BASE=$(gh api "repos/$REPO/compare/${BASE_SHA}...${HEAD_SHA}" \
           --jq '.merge_base_commit.sha')
+        if [ -z "$MERGE_BASE" ]; then
+          echo "::error::Failed to resolve merge base from GitHub API" >&2
+          exit 1
+        fi
 
         if ! git cat-file -e "${MERGE_BASE}^{commit}" 2>/dev/null; then
           git fetch --depth=1 "$REPO_URL" "$MERGE_BASE"
