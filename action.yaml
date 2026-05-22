@@ -50,6 +50,9 @@ runs:
       env:
         ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
       run: |
+        # Build allowed-tools list
+        set -euo pipefail
+
         echo "list=$(
           echo "$ALLOWED_TOOLS" \
             | grep -v '^[[:space:]]*$' \
@@ -77,6 +80,8 @@ runs:
         REPO_URL: "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
       run: |
         # Get the merge base SHA from the API, then fetch and diff locally.
+        set -euo pipefail
+
         # Using the merge base (rather than BASE_SHA) ensures we only diff
         # what the PR author changed, excluding commits pushed to the base
         # branch after this branch was created.
@@ -137,6 +142,9 @@ runs:
         REPO: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
       run: |
+        # Generate PR context
+        set -euo pipefail
+
         {
           echo "pr_context<<EOF"
           # WARNING: gh-pr-render is not pinned to a version here
@@ -154,6 +162,9 @@ runs:
         RE_REVIEW_PROMPT: ${{ inputs.re-review-prompt }}
         PR_CONTEXT: ${{ steps.render.outputs.pr_context }}
       run: |
+        # Generate correct prompt
+        set -euo pipefail
+
         {
           echo "prompt<<EOF"
           if echo "$PR_CONTEXT" | grep "^### Comment by " | grep -qF " $BOT_USERNAME "; then
