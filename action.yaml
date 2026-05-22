@@ -72,15 +72,18 @@ runs:
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        REPO: "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
       run: |
+        # Fetch commits; compare changes to PR
+
         # fetch-depth: 2 is sufficient (base and head are parents of the merge
         # commit), but fall back to targeted fetches in case the caller used
         # a shallower clone.
         if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-          git fetch --depth=1 origin "$BASE_SHA"
+          git fetch --depth=1 "$REPO" "$BASE_SHA"
         fi
         if ! git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
-          git fetch --depth=1 origin "$HEAD_SHA"
+          git fetch --depth=1 "$REPO" "$HEAD_SHA"
         fi
 
         mkdir -p .pr-cache
