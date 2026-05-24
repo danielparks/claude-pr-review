@@ -1,23 +1,35 @@
 name: Claude PR Review
 description: >
-  Review pull requests with Claude. Detects whether a re-review is needed on
-  synchronize by comparing the PR diff against a cached baseline.
+  Have Claude review and re-review pull requests with the context of all the
+  comments in the pull request, including inline comments along with the nearest
+  diff fragment.
+
+  (The full diff is not included; Claude already has access to that.)
+
+  This detects whether a re-review is needed on `synchronize` (push) by
+  comparing the PR diff against a cached baseline. If the PR is the same, i.e.
+  it was rebased after changes were made elsewhere in the codebase, this skips
+  the Claude review.
 
 inputs:
   anthropic-api-key:
-    description: Anthropic API key
+    description: >
+      Anthropic API key for token-based billing. Either this or
+      claude-code-oauth-token must be specified.
     required: false
   claude-code-oauth-token:
-    description: Claude Code OAuth token
+    description: >
+      Claude Code OAuth token for use with a subscription account. Generate with
+      `claude setup-token`. Either this or anthropic-api-key must be specified.
     required: false
   initial-review-prompt:
-    description: Prompt when no prior Claude review exists
+    description: Prompt for when no prior Claude review exists.
     required: true
   re-review-prompt:
-    description: Prompt when a prior Claude review exists
+    description: Prompt for when a prior Claude review exists.
     required: true
   bot-username:
-    description: GitHub username of the bot, used to detect prior reviews
+    description: GitHub username of the bot; used to detect prior reviews.
     required: false
     default: claude
   allowed-tools:

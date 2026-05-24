@@ -1,8 +1,12 @@
 # claude-pr-review action — give Claude context for PR reviews
 
-This gives Claude a full view of the discussion in a PR using [gh-pr-render]. Diff comments are included with their nearest partial diff, but the overall diff is not provided.
+Have Claude review and re-review pull requests with the context of all the comments in the pull request, including inline comments along with the nearest diff fragment.
 
-This also makes Claude smarter about re-reviewing updated PRs.
+(The full diff is not included; Claude already has access to that.)
+
+This detects whether a re-review is needed on `synchronize` (push) by comparing the PR diff against a cached baseline. If the PR is the same, i.e. it was rebased after changes were made elsewhere in the codebase, this skips the Claude review.
+
+The context is generated with [gh-pr-render].
 
 ## Quick start
 
@@ -45,6 +49,46 @@ This also makes Claude smarter about re-reviewing updated PRs.
 ```
 
 See example [workflow-review.yaml] for a working PR-triggered workflow, and example [workflow-response.yaml] for a working comment (@claude) triggered workflow. This repo uses both.
+
+## Inputs
+
+### `anthropic-api-key`
+
+Anthropic API key for token-based billing. Either this or `claude-code-oauth-token` must be specified.
+
+### `claude-code-oauth-token`
+
+Claude Code OAuth token for use with a subscription account. Generate with `claude setup-token`. Either this or `anthropic-api-key` must be specified.
+
+### `initial-review-prompt`
+
+Required. Prompt for when no prior Claude review exists.
+
+### `re-review-prompt`
+
+Required. Prompt for when a prior Claude review exists.
+
+### `bot-username`
+
+GitHub username of the bot; used to detect prior reviews. Defaults to “claude”.
+
+### `allowed-tools`
+
+List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. Defaults to:
+
+    mcp__github_inline_comment__create_inline_comment
+    Read
+    Bash(find:*)
+    Bash(grep:*)
+    Bash(git log:*)
+    Bash(git diff:*)
+    Bash(git blame:*)
+    Bash(gh pr comment:*)
+    Bash(gh pr diff:*)
+    Bash(gh pr view:*)
+    Bash(gh run list:*)
+    Bash(gh run view:*)
+    Bash(gh api:*)
 
 ## Details
 
