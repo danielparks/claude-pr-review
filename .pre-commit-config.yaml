@@ -37,14 +37,14 @@ repos:
         language: system
         entry: scripts/generate-workflows
         pass_filenames: false
-        files: ^workflow-.*\.yaml$|^scripts/generate-workflows$
+        files: workflow.*\.yaml$|^scripts/generate-workflows$
         stages: [pre-commit, pre-merge-commit]
       - id: zizmor
         name: zizmor
         language: system
         entry: zizmor
         pass_filenames: true
-        files: workflow[/-].*\.yaml$|^action\.yaml$
+        files: workflow.*\.yaml$|^action\.yaml$
         stages: [pre-commit, pre-merge-commit]
       - id: actionlint
         name: actionlint
@@ -52,7 +52,7 @@ repos:
         entry: actionlint
         pass_filenames: true
         types_or: [yaml]
-        files: ^workflow-
+        files: workflow
         stages: [pre-commit, pre-merge-commit]
       - id: ghalint workflow
         name: ghalint workflow
@@ -60,7 +60,7 @@ repos:
         entry: ghalint run
         pass_filenames: true
         types_or: [yaml]
-        files: ^workflow-
+        files: workflow
         stages: [pre-commit, pre-merge-commit]
       - id: ghalint action
         name: ghalint action
