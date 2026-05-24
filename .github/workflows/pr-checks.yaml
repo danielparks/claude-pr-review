@@ -1,0 +1,65 @@
+name: Checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  prek:
+    name: prek
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@f48d2f8ba2b452934c948b7be1a768079c3632ff # v2.79.6
+        with:
+          tool: zizmor
+      - name: Install actionlint
+        working-directory: ${{ runner.temp }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Download and install actionlint
+          set -euo pipefail
+
+          mkdir actionlint
+          cd actionlint
+          gh release download \
+            --repo rhysd/actionlint \
+            --pattern 'actionlint_*_linux_amd64.tar.gz'
+          gh attestation verify actionlint_*.tar.gz \
+            --repo rhysd/actionlint
+
+          tar xzf actionlint_*.tar.gz
+          cp actionlint /usr/local/bin
+      - name: Install ghalint
+        working-directory: ${{ runner.temp }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Download and install ghalint
+          set -euo pipefail
+
+          mkdir ghalint
+          cd ghalint
+          gh release download \
+            -R suzuki-shunsuke/ghalint \
+            -p 'ghalint_*_linux_amd64.tar.gz'
+          gh attestation verify ghalint_*.tar.gz \
+            -R suzuki-shunsuke/ghalint \
+            --signer-workflow suzuki-shunsuke/go-release-workflow/.github/workflows/release.yaml
+
+          tar xzf ghalint_*.tar.gz
+          cp ghalint /usr/local/bin
+      - uses: j178/prek-action@bdca6f102f98e2b4c7029491a53dfd366469e33d # v2.0.4
+        with:
+          extra-args: --all-files
