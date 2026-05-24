@@ -4,6 +4,12 @@ description: >
   synchronize by comparing the PR diff against a cached baseline.
 
 inputs:
+  anthropic-api-key:
+    description: Anthropic API key
+    required: false
+  claude-code-oauth-token:
+    description: Claude Code OAuth token
+    required: false
   initial-review-prompt:
     description: Prompt when no prior Claude review exists
     required: true
@@ -14,17 +20,8 @@ inputs:
     description: GitHub username of the bot, used to detect prior reviews
     required: false
     default: claude
-  anthropic-api-key:
-    description: Anthropic API key
-    required: false
-  claude-code-oauth-token:
-    description: Claude Code OAuth token
-    required: false
   allowed-tools:
-    description: >
-      List of tools to allow, one per line. Passed to --allowedTools.
-      WARNING: mcp__github_inline_comment__create_inline_comment requires the
-      MCP server to be configured in your claude-code-action setup.
+    description: List of tools to allow, one per line. Passed to --allowedTools.
     required: false
     default: |
       mcp__github_inline_comment__create_inline_comment
