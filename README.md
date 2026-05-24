@@ -54,19 +54,19 @@ See example [workflow-review.yaml] for a working PR-triggered workflow, and exam
 
 ### `anthropic-api-key`
 
-Anthropic API key for token-based billing. Either this or `claude-code-oauth-token` must be specified.
+Anthropic API key for token-based billing. Either this or `claude-code-oauth-token` is **required**.
 
 ### `claude-code-oauth-token`
 
-Claude Code OAuth token for use with a subscription account. Generate with `claude setup-token`. Either this or `anthropic-api-key` must be specified.
+Claude Code OAuth token for use with a subscription account. Generate with `claude setup-token`. Either this or `anthropic-api-key` is **required**.
 
 ### `initial-review-prompt`
 
-Required. Prompt for when no prior Claude review exists.
+**Required.** Prompt for when no prior Claude review exists.
 
 ### `re-review-prompt`
 
-Required. Prompt for when a prior Claude review exists.
+**Required.** Prompt for when a prior Claude review exists.
 
 ### `bot-username`
 
