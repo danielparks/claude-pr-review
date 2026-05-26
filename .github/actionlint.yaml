@@ -1,0 +1,10 @@
+config-variables: []
+
+# queue support: https://github.com/rhysd/actionlint/pull/654
+paths:
+  workflow-response.yaml:
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section.'
+  .github/workflows/claude-response.yaml:
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section.'

@@ -71,9 +71,8 @@ runs:
             | sed 's/,$//' \
           )" >> "$GITHUB_OUTPUT"
 
-    - name: Restore diff cache
-      id: cache-restore
-      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+    - name: diff cache
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: .pr-cache
         key: pr-diff-${{ github.event.pull_request.number }}-${{ github.run_id }}
@@ -137,12 +136,6 @@ runs:
         fi
 
         cp .pr-cache/new.patch .pr-cache/prev.patch
-
-    - name: Save diff cache
-      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-      with:
-        path: .pr-cache
-        key: pr-diff-${{ github.event.pull_request.number }}-${{ github.run_id }}
 
     - name: Render PR discussion
       id: render
