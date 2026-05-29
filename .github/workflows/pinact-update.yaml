@@ -1,0 +1,56 @@
+name: pinact
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 9:00 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    name: update
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # Change files
+      pull-requests: write # Create PR
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # zizmor: ignore[artipacked] no archive; needed for git
+          persist-credentials: true
+      - uses: suzuki-shunsuke/pinact-action@896d595f299e71d65b9d28349d6956abe144390a # v3.0.0
+        with:
+          update: true
+          min_age: 7
+          skip_push: true
+      - name: Open PR if changed
+        run: |
+          set -euo pipefail
+
+          if [[ -z $(git status --porcelain) ]]; then
+            exit 0
+          fi
+
+          # shellcheck disable=SC2016
+          MESSAGE='`pinact run --update --min-age 7`.'
+          BRANCH="pinact-update"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "$MESSAGE"
+          git push -u origin "$BRANCH" --force
+
+          if ! gh pr list --head "$BRANCH" --state open --json number --jq '.[0]' | grep -q .; then
+            gh pr create \
+              --title "$MESSAGE" \
+              --body 'Automated weekly update.'
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}

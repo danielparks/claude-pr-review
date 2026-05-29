@@ -4,3 +4,4 @@ version: 3
 files:
   - pattern: action.yaml
   - pattern: workflow-*.yaml
+  - pattern: .github/workflows/*.yaml

@@ -1,0 +1,5 @@
+excludes:
+  # Needed to use git within the workflow. Does not generate an archive.
+  - policy_name: checkout_persist_credentials_should_be_false
+    workflow_file_path: .github/workflows/pinact-update.yaml
+    job_name: update
