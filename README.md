@@ -11,7 +11,7 @@ The context is generated with [gh-pr-render].
 ## Quick start
 
 ```yaml
-- uses: danielparks/claude-pr-review@620cb52116299bace8e287b6483ab8599a5d363a # HEAD
+- uses: danielparks/claude-pr-review@1567ea721defa4614e1e8bd40ba156f9cd81377b # v1
   with:
     # You can set either of these secrets. If both are set, the API key
     # seems to win.
