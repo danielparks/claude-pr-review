@@ -42,7 +42,7 @@ repos:
       - id: zizmor
         name: zizmor
         language: system
-        entry: zizmor
+        entry: scripts/zizmor-online --persona=pedantic
         pass_filenames: true
         files: workflow.*\.yaml$|^action\.yaml$
         stages: [pre-commit, pre-merge-commit]

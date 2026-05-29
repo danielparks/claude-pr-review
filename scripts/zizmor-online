@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Needed to get GitHub token (no command substitution in prek).
+
+GH_TOKEN="$(gh auth token)" zizmor "$@"
