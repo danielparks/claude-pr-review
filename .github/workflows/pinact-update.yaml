@@ -2,7 +2,7 @@ name: pinact
 
 on:
   schedule:
-    - cron: "0 9 * * 1" # Every Monday at 9:00 UTC
+    - cron: "0 12 * * 5" # Every Friday at 12:00 UTC (5am PDT / 4am PST).
   workflow_dispatch:
 
 permissions: {}
