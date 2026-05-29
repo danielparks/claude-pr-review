@@ -19,7 +19,7 @@ if [[ $REF == --help ]]; then
   usage; exit 0
 fi
 
-SHA=$(git rev-parse "$REF")
+SHA=$(git rev-parse "$REF"'^{}')
 
 echo "Pinning $REPO to $SHA ($REF)  # $COMMENT"
 
