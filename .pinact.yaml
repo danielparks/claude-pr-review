@@ -5,3 +5,9 @@ files:
   - pattern: action.yaml
   - pattern: workflow-*.yaml
   - pattern: .github/workflows/*.yaml
+min_age:
+  value: 30
+rules:
+  - min_age: 0
+    conditions:
+      - expr: ActionRepoOwner == "danielparks"

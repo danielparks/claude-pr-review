@@ -27,7 +27,6 @@ jobs:
       - uses: suzuki-shunsuke/pinact-action@896d595f299e71d65b9d28349d6956abe144390a # v3.0.0
         with:
           update: true
-          min_age: 7
           skip_push: true
       - name: Open PR if changed
         run: |
@@ -38,7 +37,7 @@ jobs:
           fi
 
           # shellcheck disable=SC2016
-          MESSAGE='`pinact run --update --min-age 7`.'
+          MESSAGE='`pinact run --update`.'
           BRANCH="pinact-update"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
