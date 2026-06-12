@@ -2,6 +2,7 @@
 # pinact - https://github.com/suzuki-shunsuke/pinact
 version: 3
 files:
+  - pattern: README.md
   - pattern: action.yaml
   - pattern: workflow-*.yaml
   - pattern: .github/workflows/*.yaml
