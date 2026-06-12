@@ -20,7 +20,7 @@ fi
 version=$1
 message=${2:-}
 
-if ! [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "Error: version must be X.Y.Z where X, Y, Z are digits" >&2
   exit 1
 fi
@@ -30,12 +30,7 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-major="${BASH_REMATCH[1]}"
-minor="${BASH_REMATCH[2]}"
-
 tag_full="v${version}"
-tag_major="v${major}"
-tag_minor="v${major}.${minor}"
 
 if git rev-parse "$tag_full" &>/dev/null; then
   echo "Error: tag $tag_full already exists" >&2
@@ -49,11 +44,7 @@ else
 fi
 
 git tag -s "$tag_full" -m "$full_message"
-git tag -s -f "$tag_major" -m "Release ${tag_major}"
-git tag -s -f "$tag_minor" -m "Release ${tag_minor}"
-
 git push origin "$tag_full"
-git push --force origin "$tag_major" "$tag_minor"
 
 if [[ -n "$message" ]]; then
   gh release create "$tag_full" --title "$tag_full" --notes "$message"
