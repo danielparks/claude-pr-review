@@ -151,8 +151,7 @@ runs:
 
         {
           echo "pr_context<<EOF"
-          # WARNING: gh-pr-render is not pinned to a version here
-          npx --yes gh-pr-render "$REPO" "$PR_NUMBER"
+          npx --yes gh-pr-render@0.2.0 "$REPO" "$PR_NUMBER"
           echo "EOF"
         } >> "$GITHUB_OUTPUT"
 
