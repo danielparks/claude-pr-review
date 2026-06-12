@@ -124,13 +124,14 @@ runs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo PR changed
+            DELIM=$(openssl rand -hex 8)
             {
-              echo "diff_section<<ENDSECTION"
+              echo "diff_section<<EOF-${DELIM}"
               echo '## Changes since last review'
               echo '```'
               diff .pr-cache/prev.patch .pr-cache/new.patch || true
               echo '```'
-              echo "ENDSECTION"
+              echo "EOF-${DELIM}"
             } >> "$GITHUB_OUTPUT"
           fi
         fi
@@ -149,10 +150,11 @@ runs:
         # Generate PR context
         set -euo pipefail
 
+        DELIM=$(openssl rand -hex 8)
         {
-          echo "pr_context<<EOF"
+          echo "pr_context<<EOF-${DELIM}"
           npx --yes gh-pr-render@0.2.0 "$REPO" "$PR_NUMBER"
-          echo "EOF"
+          echo "EOF-${DELIM}"
         } >> "$GITHUB_OUTPUT"
 
     - name: Select prompt
@@ -168,14 +170,15 @@ runs:
         # Generate correct prompt
         set -euo pipefail
 
+        DELIM=$(openssl rand -hex 8)
         {
-          echo "prompt<<EOF"
+          echo "prompt<<EOF-${DELIM}"
           if echo "$PR_CONTEXT" | grep "^### Comment by " | grep -qF " $BOT_USERNAME "; then
             printf '%s\n' "$RE_REVIEW_PROMPT"
           else
             printf '%s\n' "$INITIAL_PROMPT"
           fi
-          echo "EOF"
+          echo "EOF-${DELIM}"
         } >> "$GITHUB_OUTPUT"
 
     - uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e # v1.0.123
