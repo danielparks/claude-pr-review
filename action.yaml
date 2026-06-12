@@ -153,7 +153,10 @@ runs:
         DELIM=$(openssl rand -hex 8)
         {
           echo "pr_context<<EOF-${DELIM}"
-          npx --yes gh-pr-render@0.2.0 "$REPO" "$PR_NUMBER"
+          # Don’t use local node_modules. Without `--prefix` it fails when
+          # running in the gh-pr-render repo.
+          npm exec --yes --prefix $(mktemp -d) --package=gh-pr-render@0.2.0 -- \
+            gh-pr-render "$REPO" "$PR_NUMBER"
           echo "EOF-${DELIM}"
         } >> "$GITHUB_OUTPUT"
 
