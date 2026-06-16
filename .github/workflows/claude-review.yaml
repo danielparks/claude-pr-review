@@ -59,7 +59,7 @@ jobs:
             review are included below.
 
             Update your feedback to reflect the current state of the PR:
-            - Resolve or update any comments that have been addressed.
+            - Update any comments that have been addressed.
             - Flag any new issues introduced by the changes.
             - Use `mcp__github_inline_comment__create_inline_comment` (with
               `confirmed: true`) to highlight new specific code issues.
