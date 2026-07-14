@@ -90,6 +90,12 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(gh run view:*)
     Bash(gh api:*)
 
+### `additional-allowed-tools`
+
+List of additional tools to allow Claude to use, one per line. Added to `allowed-tools` and then passed to `--allowedTools`.
+
+This is useful if you just want to add a tool to the default tool list.
+
 ## Details
 
 ### PR updates

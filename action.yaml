@@ -51,6 +51,15 @@ inputs:
       Bash(gh run list:*)
       Bash(gh run view:*)
       Bash(gh api:*)
+  additional-allowed-tools:
+    description: >
+      List of additional tools to allow Claude to use, one per line. Added to
+      `allowed-tools` and then passed to `--allowedTools`.
+
+      This is useful if you just want to add a tool to the default tool list.
+    required: false
+    default:
+
 
 runs:
   using: composite
@@ -59,7 +68,9 @@ runs:
       id: tools
       shell: bash
       env:
-        ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
+        ALLOWED_TOOLS: |
+          ${{ inputs.allowed-tools }}
+          ${{ inputs.additional-allowed-tools }}
       run: |
         # Build allowed-tools list
         set -euo pipefail
