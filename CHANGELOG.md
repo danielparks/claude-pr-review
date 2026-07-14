@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 - Added `additional-allowed-tools` input.
 - Remove “resolve” from example prompts; Claude cannot actually resolve comments with the GitHub REST API.
+- Add input to configure [gh-pr-render] version.
+- Update [gh-pr-render] to version 0.3.0 to render labels and use blockquotes to ensure that content is distinct from structure.
+
+[gh-pr-render]: https://github.com/danielparks/gh-pr-render
 
 ## Release 1.0.2 (2026-06-12)
 

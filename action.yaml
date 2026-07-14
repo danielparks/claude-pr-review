@@ -72,6 +72,10 @@ inputs:
       This is useful if you just want to add a tool to the default tool list.
     required: false
     default:
+  gh-pr-render-version:
+    description: Version of the `gh-pr-render` tool to use.
+    required: false
+    default: 0.3.0
 
 runs:
   using: composite
@@ -169,6 +173,7 @@ runs:
         GH_TOKEN: ${{ github.token }}
         REPO: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
+        RENDER_VERSION: ${{ inputs.gh-pr-render-version }}
       run: |
         # Generate PR context
         set -euo pipefail
@@ -178,7 +183,8 @@ runs:
           echo "pr_context<<EOF-${DELIM}"
           # Don’t use local node_modules. Without `--prefix` it fails when
           # running in the gh-pr-render repo.
-          npm exec --yes --prefix $(mktemp -d) --package=gh-pr-render@0.2.0 -- \
+          npm exec --yes --prefix $(mktemp -d) \
+            --package=gh-pr-render@"$RENDER_VERSION" -- \
             gh-pr-render "$REPO" "$PR_NUMBER"
           echo "EOF-${DELIM}"
         } >> "$GITHUB_OUTPUT"

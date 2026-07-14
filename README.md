@@ -92,6 +92,10 @@ List of additional tools to allow Claude to use, one per line. Added to `allowed
 
 This is useful if you just want to add a tool to the default tool list.
 
+### `gh-pr-render-version`
+
+Version of the [gh-pr-render] tool to use. Defaults to the latest version at the time of this action’s release.
+
 ## Details
 
 ### PR updates
