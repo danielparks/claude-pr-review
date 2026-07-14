@@ -37,7 +37,7 @@ inputs:
       - Flag any new issues introduced by the changes.
   prompt-suffix:
     description: >
-      Added to the end of `initial-review-prompt` and `re-review-prompt`.
+      Appended to `initial-review-prompt` and `re-review-prompt`.
     default: |
       - Use `mcp__github_inline_comment__create_inline_comment` (with
         `confirmed: true`) to highlight new specific code issues.
@@ -47,6 +47,12 @@ inputs:
       - Use `gh pr comment` for top-level feedback. Don't repeat feedback
         there that you've already given elsewhere.
       - Only post GitHub comments — don't submit review text as messages.
+  additional-prompt-suffix:
+    description: >
+      Appended after `prompt-suffix`.
+
+      This is useful if you just want to add text to the default prompt.
+    default:
   bot-username:
     description: GitHub username of the bot; used to detect prior reviews.
     default: claude
@@ -227,6 +233,7 @@ runs:
           ${{ steps.select-prompt.outputs.prompt }}
 
           ${{ inputs.prompt-suffix }}
+          ${{ inputs.additional-prompt-suffix }}
 
           ${{ steps.diff.outputs.diff_section }}
 

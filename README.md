@@ -63,6 +63,12 @@ Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
       there that you've already given elsewhere.
     - Only post GitHub comments — don't submit review text as messages.
 
+### `additional-prompt-suffix`
+
+Appended after `prompt-suffix`. Empty default.
+
+This is useful if you just want to add text to the default prompt.
+
 ### `bot-username`
 
 GitHub username of the bot; used to detect prior reviews. Defaults to “claude”.
@@ -87,7 +93,7 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
 
 ### `additional-allowed-tools`
 
-List of additional tools to allow Claude to use, one per line. Added to `allowed-tools` and then passed to `--allowedTools`.
+List of additional tools to allow Claude to use, one per line. Added to `allowed-tools` and then passed to `--allowedTools`. Empty default.
 
 This is useful if you just want to add a tool to the default tool list.
 
