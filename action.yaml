@@ -16,22 +16,28 @@ inputs:
     description: >
       Anthropic API key for token-based billing. Either this or
       claude-code-oauth-token must be specified.
-    required: false
   claude-code-oauth-token:
     description: >
       Claude Code OAuth token for use with a subscription account. Generate with
       `claude setup-token`. Either this or anthropic-api-key must be specified.
-    required: false
   initial-review-prompt:
     description: Prompt for when no prior Claude review exists.
-    required: true
+    default: |
+      Please review this pull request. The PR branch is already checked out in
+      the current working directory, and the PR discussion is included below.
   re-review-prompt:
     description: Prompt for when a prior Claude review exists.
-    required: true
+    default: |
+      This pull request has been updated. The PR discussion (including your
+      prior review) and a diff of what changed since your last review are
+      included below.
+
+      Update your feedback to reflect the current state of the PR:
+      - Update any comments that have been addressed.
+      - Flag any new issues introduced by the changes.
   unconditional-prompt-end:
     description: >
       Added to the end of `initial-review-prompt` and `re-review-prompt`.
-    required: false
     default: |
       - Use `mcp__github_inline_comment__create_inline_comment` (with
         `confirmed: true`) to highlight new specific code issues.
@@ -43,13 +49,11 @@ inputs:
       - Only post GitHub comments — don't submit review text as messages.
   bot-username:
     description: GitHub username of the bot; used to detect prior reviews.
-    required: false
     default: claude
   allowed-tools:
     description: >
       List of tools to allow Claude to use, one per line. Passed to
       `--allowedTools`.
-    required: false
     default: |
       mcp__github_inline_comment__create_inline_comment
       Read
@@ -70,11 +74,9 @@ inputs:
       `allowed-tools` and then passed to `--allowedTools`.
 
       This is useful if you just want to add a tool to the default tool list.
-    required: false
     default:
   gh-pr-render-version:
     description: Version of the `gh-pr-render` tool to use.
-    required: false
     default: 0.3.0
 
 runs:

@@ -38,15 +38,3 @@ jobs:
           # seems to win.
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          initial-review-prompt: |
-            Please review this pull request. The PR branch is already checked
-            out in the current working directory, and the PR discussion is
-            included below.
-          re-review-prompt: |
-            This pull request has been updated. The PR discussion (including
-            your prior review) and a diff of what changed since your last
-            review are included below.
-
-            Update your feedback to reflect the current state of the PR:
-            - Update any comments that have been addressed.
-            - Flag any new issues introduced by the changes.
