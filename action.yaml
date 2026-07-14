@@ -35,7 +35,7 @@ inputs:
       Update your feedback to reflect the current state of the PR:
       - Update any comments that have been addressed.
       - Flag any new issues introduced by the changes.
-  unconditional-prompt-end:
+  prompt-suffix:
     description: >
       Added to the end of `initial-review-prompt` and `re-review-prompt`.
     default: |
@@ -226,7 +226,7 @@ runs:
 
           ${{ steps.select-prompt.outputs.prompt }}
 
-          ${{ inputs.unconditional-prompt-end }}
+          ${{ inputs.prompt-suffix }}
 
           ${{ steps.diff.outputs.diff_section }}
 

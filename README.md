@@ -50,7 +50,7 @@ Prompt for when a prior Claude review exists. Defaults to:
     - Update any comments that have been addressed.
     - Flag any new issues introduced by the changes.
 
-### `unconditional-prompt-end`
+### `prompt-suffix`
 
 Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
 

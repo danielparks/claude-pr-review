@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking changes
 
-- Added `unconditional-prompt-end` input with a default. Its contents were previously included in both prompts in the example, so configurations will need to be changed on update.
+- Added `prompt-suffix` input with a default. Its contents were previously included in both prompts in the example, so configurations will need to be changed on update.
 
 ### Changes
 
