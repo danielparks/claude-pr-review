@@ -32,7 +32,10 @@ inputs:
       prior review) and a diff of what changed since your last review are
       included below.
 
-      Update your feedback to reflect the current state of the PR:
+      Respond to any new discussion.
+
+      If there are new changes, update your feedback to reflect the current
+      state of the PR:
       - Update any comments that have been addressed.
       - Flag any new issues introduced by the changes.
   prompt-suffix:
@@ -44,8 +47,8 @@ inputs:
       - Use `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments/$ID/replies -X POST -f "body=$BODY"`
         to reply to diff comments, replacing `$ID` with the comment id
         and `$BODY` with your reply.
-      - Use `gh pr comment` for top-level feedback. Don't repeat feedback
-        there that you've already given elsewhere.
+      - Use `gh pr comment` for top-level feedback if there is anything that
+        can't be addressed with a diff comment.
       - Only post GitHub comments — don't submit review text as messages.
   additional-prompt-suffix:
     description: >
@@ -189,7 +192,7 @@ runs:
         DELIM=$(openssl rand -hex 8)
         {
           echo "pr_context<<EOF-${DELIM}"
-          # Don’t use local node_modules. Without `--prefix` it fails when
+          # Don't use local node_modules. Without `--prefix` it fails when
           # running in the gh-pr-render repo.
           npm exec --yes --prefix $(mktemp -d) \
             --package=gh-pr-render@"$RENDER_VERSION" -- \

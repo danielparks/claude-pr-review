@@ -11,10 +11,11 @@ All notable changes to this project will be documented in this file.
 ### Changes
 
 - Added `additional-allowed-tools` input.
-- Removed “resolve” from example prompts; Claude cannot actually resolve comments with the GitHub REST API.
 - Added input to configure [gh-pr-render] version.
 - Updated [gh-pr-render] to version 0.3.0 to render labels and use blockquotes to ensure that content is distinct from structure.
-- Added defaults for `initial-review-prompt` and `re-review-prompt`.
+- Added defaults for `initial-review-prompt` and `re-review-prompt` based on old example prompts.
+- Removed “resolve” from prompt defaults; Claude cannot actually resolve comments with the GitHub REST API.
+- Clarified re-review prompt to emphasize only adding comments if there were new changes or discussion.
 
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
 
