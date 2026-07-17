@@ -20,24 +20,23 @@ inputs:
     description: >
       Claude Code OAuth token for use with a subscription account. Generate with
       `claude setup-token`. Either this or anthropic-api-key must be specified.
-  initial-review-prompt:
-    description: Prompt for when no prior Claude review exists.
+  prompt:
+    description: >
+      Prompt sent to Claude for both initial reviews and re-reviews. Claude
+      determines the current state of the PR from the discussion context
+      included at the end of the prompt.
     default: |
       Please review this pull request. The PR branch is already checked out in
       the current working directory, and the PR discussion is included below.
-  re-review-prompt:
-    description: Prompt for when a prior Claude review exists.
-    default: |
-      This pull request has been updated. The PR discussion (including your
-      prior review) and a diff of what changed since your last review are
-      included below.
 
-      Respond to discussion as appropriate, and review new changes. If nothing
-      has changed there is no need to note it unless the user seems to think
-      that changes were made.
+      If there are prior review comments from you in the PR discussion, treat
+      this as a re-review. Respond to discussion as appropriate, and review new
+      changes. If nothing has changed there is no need to note it unless the
+      user seems to think that changes were made.
+
   prompt-suffix:
     description: >
-      Appended to `initial-review-prompt` and `re-review-prompt`.
+      Appended to `prompt`.
     default: |
       Only post GitHub comments — don't submit review text as messages.
 
@@ -70,9 +69,6 @@ inputs:
 
       This is useful if you just want to add text to the default prompt.
     default:
-  bot-username:
-    description: GitHub username of the bot; used to detect prior reviews.
-    default: claude
   allowed-tools:
     description: >
       List of tools to allow Claude to use, one per line. Passed to
@@ -228,30 +224,6 @@ runs:
           echo "EOF-${DELIM}"
         } >> "$GITHUB_OUTPUT"
 
-    - name: Select prompt
-      id: select-prompt
-      if: steps.diff.outputs.skip != 'true'
-      shell: bash
-      env:
-        BOT_USERNAME: ${{ inputs.bot-username }}
-        INITIAL_PROMPT: ${{ inputs.initial-review-prompt }}
-        RE_REVIEW_PROMPT: ${{ inputs.re-review-prompt }}
-        PR_CONTEXT: ${{ steps.render.outputs.pr_context }}
-      run: |
-        # Generate correct prompt
-        set -euo pipefail
-
-        DELIM=$(openssl rand -hex 8)
-        {
-          echo "prompt<<EOF-${DELIM}"
-          if echo "$PR_CONTEXT" | grep "^### Comment by " | grep -qF " $BOT_USERNAME "; then
-            printf '%s\n' "$RE_REVIEW_PROMPT"
-          else
-            printf '%s\n' "$INITIAL_PROMPT"
-          fi
-          echo "EOF-${DELIM}"
-        } >> "$GITHUB_OUTPUT"
-
     - uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e # v1.0.123
       id: claude
       if: steps.diff.outputs.skip != 'true'
@@ -262,7 +234,7 @@ runs:
           REPO: ${{ github.repository }}
           PR NUMBER: ${{ github.event.pull_request.number }}
 
-          ${{ steps.select-prompt.outputs.prompt }}
+          ${{ inputs.prompt }}
 
           ${{ inputs.prompt-suffix }}
           ${{ inputs.additional-prompt-suffix }}

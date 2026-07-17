@@ -31,36 +31,27 @@ Anthropic API key for token-based billing. Either this or `claude-code-oauth-tok
 
 Claude Code OAuth token for use with a subscription account. Generate with `claude setup-token`. Either this or `anthropic-api-key` is **required**.
 
-### `initial-review-prompt`
+### `prompt`
 
-Prompt for when no prior Claude review exists. Defaults to:
+Prompt sent to Claude for both initial reviews and re-reviews. Claude determines
+the current state of the PR from the discussion context included at the end of
+the prompt. Defaults to:
 
-<!-- default:initial-review-prompt -->
+<!-- default:prompt -->
 
     Please review this pull request. The PR branch is already checked out in
     the current working directory, and the PR discussion is included below.
 
-<!-- /default:initial-review-prompt -->
+    If there are prior review comments from you in the PR discussion, treat
+    this as a re-review. Respond to discussion as appropriate, and review new
+    changes. If nothing has changed there is no need to note it unless the
+    user seems to think that changes were made.
 
-### `re-review-prompt`
-
-Prompt for when a prior Claude review exists. Defaults to:
-
-<!-- default:re-review-prompt -->
-
-    This pull request has been updated. The PR discussion (including your
-    prior review) and a diff of what changed since your last review are
-    included below.
-
-    Respond to discussion as appropriate, and review new changes. If nothing
-    has changed there is no need to note it unless the user seems to think
-    that changes were made.
-
-<!-- /default:re-review-prompt -->
+<!-- /default:prompt -->
 
 ### `prompt-suffix`
 
-Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
+Added to the end of `prompt`. Defaults to:
 
 <!-- default:prompt-suffix -->
 
@@ -97,10 +88,6 @@ Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
 Appended after `prompt-suffix`. Empty default.
 
 This is useful if you just want to add text to the default prompt.
-
-### `bot-username`
-
-GitHub username of the bot; used to detect prior reviews. Defaults to “claude”.
 
 ### `allowed-tools`
 
