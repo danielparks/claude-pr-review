@@ -54,13 +54,13 @@ Prompt for when a prior Claude review exists. Defaults to:
 
 Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
 
-    - Use `mcp__github_inline_comment__create_inline_comment` (with
-      `confirmed: true`) to highlight new specific code issues.
+    - Use `mcp__github_inline_comment__create_inline_comment` (without
+      `confirmed`) to highlight new specific code issues.
     - Use `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments/$ID/replies -X POST -f "body=$BODY"`
       to reply to diff comments, replacing `$ID` with the comment id
       and `$BODY` with your reply.
-    - Use `gh pr comment` for top-level feedback. Don't repeat feedback
-      there that you've already given elsewhere.
+    - After submitting inline comments, use `gh pr review --comment` for
+      top-level feedback if there is anything that couldn't be addressed.
     - Only post GitHub comments — don't submit review text as messages.
 
 ### `additional-prompt-suffix`
@@ -86,6 +86,7 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(git blame:*)
     Bash(gh pr comment:*)
     Bash(gh pr diff:*)
+    Bash(gh pr review --comment:*)
     Bash(gh pr view:*)
     Bash(gh run list:*)
     Bash(gh run view:*)
