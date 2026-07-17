@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking changes
 
+- Replaced `initial-review-prompt` and `re-review-prompt` inputs with a single `prompt` input. Claude now determines the current state of the PR from the discussion context, eliminating the fragile bot-comment grep logic.
+- Removed `bot-username` input (no longer needed).
 - Added `prompt-suffix` (with default) and `additional-prompt-suffix` inputs. The `prompt-suffix` default was previously included in both prompts in the example, so configurations will need to be changed on update.
 
 ### Changes
