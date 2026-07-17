@@ -86,7 +86,7 @@ inputs:
     default:
   gh-pr-render-version:
     description: Version of the `gh-pr-render` tool to use.
-    default: 0.3.0
+    default: 0.4.0
 
 runs:
   using: composite
