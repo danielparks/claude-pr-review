@@ -32,6 +32,13 @@ repos:
         pass_filenames: true
         types_or: [javascript, json, markdown, yaml]
         stages: [pre-commit, pre-merge-commit]
+      - id: mcp-server tests
+        name: mcp-server tests
+        language: system
+        entry: node --test --test-timeout=5000 mcp-server/*.test.js
+        pass_filenames: false
+        files: ^mcp-server/
+        stages: [pre-commit, pre-merge-commit]
       - id: generate-workflows
         name: generate-workflows
         language: system

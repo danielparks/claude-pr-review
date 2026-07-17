@@ -54,13 +54,15 @@ Prompt for when a prior Claude review exists. Defaults to:
 
 Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
 
-    - Use `mcp__github_inline_comment__create_inline_comment` (without
-      `confirmed`) to highlight new specific code issues.
-    - Use `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments/$ID/replies -X POST -f "body=$BODY"`
-      to reply to diff comments, replacing `$ID` with the comment id
-      and `$BODY` with your reply.
-    - After submitting inline comments, use `gh pr review --comment` for
-      top-level feedback if there is anything that couldn't be addressed.
+    - Call `mcp__pr_review__add_comment` for every specific code issue you
+      find. It only queues the comment — nothing is posted yet.
+    - When you're done, call `mcp__pr_review__submit_review` exactly once
+      so all queued comments post together as a single review. Pass
+      `body` for top-level feedback that isn't tied to a specific line;
+      you can call it with only `body` and no queued comments if you have
+      nothing to flag inline.
+    - Use `mcp__pr_review__reply_to_comment` to reply to existing diff
+      comments.
     - Only post GitHub comments — don't submit review text as messages.
 
 ### `additional-prompt-suffix`
@@ -77,20 +79,19 @@ GitHub username of the bot; used to detect prior reviews. Defaults to “claude�
 
 List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. Defaults to:
 
-    mcp__github_inline_comment__create_inline_comment
+    mcp__pr_review__add_comment
+    mcp__pr_review__submit_review
+    mcp__pr_review__reply_to_comment
     Read
     Bash(find:*)
     Bash(grep:*)
     Bash(git log:*)
     Bash(git diff:*)
     Bash(git blame:*)
-    Bash(gh pr comment:*)
     Bash(gh pr diff:*)
-    Bash(gh pr review --comment:*)
     Bash(gh pr view:*)
     Bash(gh run list:*)
     Bash(gh run view:*)
-    Bash(gh api:*)
 
 ### `additional-allowed-tools`
 
@@ -104,6 +105,14 @@ Version of the [gh-pr-render] tool to use. Defaults to the latest version at the
 
 ## Details
 
+### MCP tools
+
+This action bundles its own MCP server ([`mcp-server/pr-review-server.js`]) providing three tools, rather than using [anthropics/claude-code-action]'s built-in inline-comment tool. That upstream tool posts each inline comment through GitHub's single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one, the way GitHub's own “Start a review” button groups them. No amount of prompt tuning can fix that; it requires calling GitHub's array-based review endpoint instead.
+
+- `mcp__pr_review__add_comment` queues an inline comment in memory. Nothing is posted to GitHub yet.
+- `mcp__pr_review__submit_review` posts everything queued by `add_comment`, plus an optional top-level `body`, as a single grouped review (`event: COMMENT` — it can never approve or request changes).
+- `mcp__pr_review__reply_to_comment` replies to an existing diff comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
+
 ### PR updates
 
 When a PR is updated this compares the version of the PR to the new version. If they are identical, e.g. the PR was rebased on changes to another part of the codebase, it does not trigger Claude to re-review.
@@ -113,3 +122,5 @@ If the changes are not identical then this provides Claude with a diff-of-diffs 
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
 [workflow-review.yaml]: workflow-review.yaml
 [workflow-response.yaml]: workflow-response.yaml
+[anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action
+[`mcp-server/pr-review-server.js`]: mcp-server/pr-review-server.js
