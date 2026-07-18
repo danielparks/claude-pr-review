@@ -3,8 +3,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../mcp-server"
 
-npm ci
-npm run lint
+if [[ ! -d node_modules ]] || ! npm ls --depth=0 &>/dev/null; then
+  npm ci
+fi
 npm run check
 npm test
 

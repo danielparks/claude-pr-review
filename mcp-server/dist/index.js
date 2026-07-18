@@ -35174,11 +35174,18 @@ if (!GITHUB_TOKEN || !REPO_OWNER || !REPO_NAME || !PR_NUMBER) {
   );
   process.exit(1);
 }
+var pullNumber = Number(PR_NUMBER);
+if (!Number.isInteger(pullNumber) || pullNumber < 1) {
+  console.error(
+    `Error: PR_NUMBER must be a positive integer, got: ${JSON.stringify(PR_NUMBER)}`
+  );
+  process.exit(1);
+}
 var github = new GitHubClient({
   token: GITHUB_TOKEN,
   owner: REPO_OWNER,
   repo: REPO_NAME,
-  pullNumber: Number(PR_NUMBER),
+  pullNumber,
   ...GITHUB_API_URL ? { baseUrl: GITHUB_API_URL } : {}
 });
 await createServer(github).connect(new StdioServerTransport());
