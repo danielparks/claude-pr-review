@@ -2,13 +2,16 @@
 "use strict";
 
 // Zero-dependency MCP server exposing three PR-review tools to Claude:
-// add_comment, submit_review, reply_to_comment. See README.md for the
-// rationale — in short, GitHub's single-comment REST endpoint always
-// creates its own standalone review, so posting comments one at a time (as
-// the upstream anthropics/claude-code-action inline-comment tool does)
-// scatters them across many separate reviews instead of grouping them the
-// way "Start a review" does in the GitHub UI. This server queues comments
-// in memory and posts them all at once via the array-based review endpoint.
+// add_comment, submit_review, reply_to_comment.
+//
+// GitHub's single-comment REST endpoint always creates its own standalone
+// review, so posting comments one at a time (as the upstream
+// anthropics/claude-code-action inline-comment tool does) scatters them across
+// many separate reviews instead of grouping them the way "Start a review" does
+// in the GitHub UI.
+//
+// This server queues comments in memory and posts them all at once via the
+// array-based review endpoint.
 
 const readline = require("readline");
 
@@ -17,7 +20,8 @@ const GITHUB_API_URL = process.env.GITHUB_API_URL || "https://api.github.com";
 
 if (!GITHUB_TOKEN || !REPO_OWNER || !REPO_NAME || !PR_NUMBER) {
   console.error(
-    "Error: GITHUB_TOKEN, REPO_OWNER, REPO_NAME, and PR_NUMBER environment variables are required",
+    "Error: GITHUB_TOKEN, REPO_OWNER, REPO_NAME, and PR_NUMBER environment " +
+      "variables are required",
   );
   process.exit(1);
 }
@@ -26,8 +30,8 @@ const SERVER_NAME = "pr_review";
 const SERVER_VERSION = "0.1.0";
 
 // Ported from anthropics/claude-code-action's src/github/utils/sanitizer.ts
-// (MIT licensed) so a token Claude read from logs/output can't accidentally
-// end up posted back into a public PR comment.
+// (MIT licensed) so a token Claude read from logs/output can't accidentally end
+// up posted back into a public PR comment.
 function redactGitHubTokens(content) {
   const patterns = [
     /\bghp_[A-Za-z0-9]{36}\b/g,
@@ -75,10 +79,17 @@ async function githubRequest(method, path, body) {
 function helpMessageFor(error) {
   const message = error.message || String(error);
   if (error.status === 422 || /Validation Failed/i.test(message)) {
-    return "\n\nThis usually means a line number doesn't exist in the diff, or the file path is wrong. Only comment on lines that are part of the PR's changes.";
+    return (
+      "\n\nThis usually means a line number doesn't exist in the diff, or " +
+      "the file path is wrong. Only comment on lines that are part of the " +
+      "PR's changes."
+    );
   }
   if (error.status === 404 || /Not Found/i.test(message)) {
-    return "\n\nThis usually means the PR number, repository, comment id, or file path is incorrect.";
+    return (
+      "\n\nThis usually means the PR number, repository, comment id, or " +
+      "file path is incorrect."
+    );
   }
   return "";
 }
@@ -101,33 +112,37 @@ let pendingComments = [];
 const TOOLS = {
   add_comment: {
     description:
-      "Queue an inline review comment on a specific line or lines of a file in this PR. " +
-      "Queued comments are NOT posted to GitHub until submit_review is called — call " +
-      "add_comment for every issue you find first, then call submit_review once at the " +
-      "end so all comments land together as a single grouped review.",
+      "Queue an inline review comment on a specific line or lines of a file " +
+      "in this PR. Queued comments are NOT posted to GitHub until " +
+      "submit_review is called — call add_comment for every issue you find " +
+      "first, then call submit_review once at the end so all comments land " +
+      "together as a single grouped review.",
     inputSchema: {
       type: "object",
       properties: {
         path: {
           type: "string",
-          description: "File path to comment on, e.g. 'src/index.js'",
+          description: "Required. File path to comment on, e.g. 'src/index.js'",
         },
         body: {
           type: "string",
           description:
-            "Comment text (Markdown). For a code suggestion use a ```suggestion fenced " +
-            "block; it replaces the entire commented line range, so it must be a " +
-            "syntactically complete drop-in replacement.",
+            "Required. Comment text (Markdown). For a code suggestion use a " +
+            "```suggestion fenced block; it replaces the entire commented " +
+            "line range, so it must be a syntactically complete drop-in " +
+            "replacement.",
         },
         line: {
           type: "number",
           description:
-            "Required. The line number for a single-line comment, or the end line for a multi-line comment (used with startLine).",
+            "Required. The line number for a single-line comment, or the end " +
+            "line for a multi-line comment (used with startLine).",
         },
         startLine: {
           type: "number",
           description:
-            "Start line for a multi-line comment. Optional — omit for a single-line comment on `line`.",
+            "Start line for a multi-line comment. Optional — omit for a " +
+            "single-line comment on `line`.",
         },
         side: {
           type: "string",
@@ -136,13 +151,19 @@ const TOOLS = {
             "Side of the diff to comment on. Defaults to RIGHT (new code).",
         },
       },
-      required: ["path", "body"],
+      required: ["path", "body", "line"],
     },
-    handler: async (args) => {
-      const { path, body, line, startLine, side } = args;
+    handler: async ({ path, body, line, startLine, side }) => {
+      if (!path) {
+        throw new Error("'path' is required: file path to comment on.");
+      }
+      if (!body) {
+        throw new Error("'body' is required: Comment text (Markdown).");
+      }
       if (!line) {
         throw new Error(
-          "'line' is required: the line number for a single-line comment, or the end line for a multi-line comment",
+          "'line' is required: the line number for a single-line comment, or " +
+            "the end line for a multi-line comment.",
         );
       }
       const comment = {
@@ -159,19 +180,22 @@ const TOOLS = {
       return {
         queued: true,
         count: pendingComments.length,
-        message: `Comment queued for ${path}${startLine ? ` lines ${startLine}-${line}` : ` line ${line}`}. Call submit_review when you're done adding comments.`,
+        message: `Comment queued for ${path}${
+          startLine ? ` lines ${startLine}-${line}` : ` line ${line}`
+        }. Call submit_review when you're done adding comments.`,
       };
     },
   },
 
   submit_review: {
     description:
-      "Submit all comments queued by add_comment as a single grouped GitHub review, " +
-      "optionally with top-level review text. Always call this exactly once after you've " +
-      "finished calling add_comment for every issue in this review pass — never submit " +
-      "one comment at a time. Can also be called with only a body and no queued comments " +
-      "for pure top-level feedback. Always posts as a plain comment review (never approves " +
-      "or requests changes).",
+      "Submit all comments queued by add_comment as a single grouped GitHub " +
+      "review, optionally with top-level review text. Always call this " +
+      "exactly once after you've finished calling add_comment for every " +
+      "issue in this review pass — never submit one comment at a time. Can " +
+      "also be called with only a body and no queued comments for pure " +
+      "top-level feedback. Always posts as a plain comment review (never " +
+      "approves or requests changes).",
     inputSchema: {
       type: "object",
       properties: {
@@ -186,7 +210,8 @@ const TOOLS = {
       const body = args.body ? redactGitHubTokens(args.body) : "";
       if (pendingComments.length === 0 && !body) {
         throw new Error(
-          "Nothing to submit: call add_comment first, or pass a body for top-level-only feedback.",
+          "Nothing to submit: call add_comment first, or pass a body for " +
+            "top-level-only feedback.",
         );
       }
 
@@ -212,25 +237,38 @@ const TOOLS = {
 
   reply_to_comment: {
     description:
-      "Reply to an existing PR review comment thread (the numeric comment id is shown in " +
-      "the PR discussion you were given). Posts immediately — replies attach to an " +
-      "existing thread, not a new review, so there's nothing to group.",
+      "Reply to an existing PR review comment thread (the numeric comment id " +
+      "is shown in the PR discussion you were given). Posts immediately — " +
+      "replies attach to an existing thread, not a new review, so there's " +
+      "nothing to group.",
     inputSchema: {
       type: "object",
       properties: {
         comment_id: {
           type: "number",
-          description: "The id of the review comment to reply to.",
+          description: "Required. The id of the review comment to reply to.",
         },
-        body: { type: "string", description: "Reply text (Markdown)." },
+        body: {
+          type: "string",
+          description: "Required. Reply text (Markdown).",
+        },
       },
       required: ["comment_id", "body"],
     },
-    handler: async (args) => {
+    handler: async ({ body, comment_id }) => {
+      if (!body) {
+        throw new Error("'body' is required: Reply text (Markdown).");
+      }
+      if (!comment_id) {
+        throw new Error(
+          "'comment_id' is required: The id of the review comment to reply to.",
+        );
+      }
       const result = await githubRequest(
         "POST",
-        `/repos/${REPO_OWNER}/${REPO_NAME}/pulls/${PR_NUMBER}/comments/${args.comment_id}/replies`,
-        { body: redactGitHubTokens(args.body) },
+        `/repos/${REPO_OWNER}/${REPO_NAME}/pulls/${PR_NUMBER}` +
+          `/comments/${comment_id}/replies`,
+        { body: redactGitHubTokens(body) },
       );
       return {
         success: true,
@@ -255,8 +293,8 @@ function sendError(id, code, message) {
 
 // Tool calls are serialized through this chain so two calls (e.g. two
 // submit_review calls issued without waiting for the first to finish) can't
-// race on pendingComments — each call's handler fully completes, including
-// its own awaited GitHub requests, before the next one starts.
+// race on pendingComments — each call's handler fully completes, including its
+// own awaited GitHub requests, before the next one starts.
 let toolCallQueue = Promise.resolve();
 function enqueueToolsCall(id, params) {
   const run = toolCallQueue.then(() => handleToolsCall(id, params));
@@ -331,9 +369,9 @@ function handleMessage(message) {
   }
 }
 
-// stdin closing means the client disconnected, but a tools/call triggered
-// by the last line read may still be awaiting a GitHub API response —
-// without this, that response is silently dropped instead of sent.
+// stdin closing means the client disconnected, but a tools/call triggered by
+// the last line read may still be awaiting a GitHub API response — without
+// this, that response is silently dropped instead of sent.
 let inFlight = 0;
 let stdinClosed = false;
 
@@ -361,7 +399,8 @@ rl.on("line", (line) => {
     message = JSON.parse(trimmed);
   } catch (error) {
     console.error(
-      `pr_review MCP server: failed to parse line as JSON: ${error.message}\n  line: ${trimmed.slice(0, 200)}`,
+      `pr_review MCP server: failed to parse line as JSON: ${error.message}\n` +
+        `  line: ${trimmed.slice(0, 200)}`,
     );
     sendError(null, -32700, "Parse error");
     return;

@@ -1,10 +1,10 @@
 "use strict";
 
-// Exercises pr-review-server.js as a real subprocess talking real (local)
-// HTTP, rather than importing it and stubbing internals — the bugs found in
-// this file so far (a premature-exit-on-stdin-close data loss, and a
-// same-tick race between two submit_review calls) only show up at that
-// level, not in a unit test of an individual function.
+// Exercises pr-review-server.js as a real subprocess talking real (local) HTTP,
+// rather than importing it and stubbing internals — the bugs found in this file
+// so far (a premature-exit-on-stdin-close data loss, and a same-tick race
+// between two submit_review calls) only show up at that level, not in a unit
+// test of an individual function.
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
@@ -132,9 +132,7 @@ function startClient(port) {
   function send(method, params) {
     const id = nextId++;
     const promise = new Promise((resolve) => pending.set(id, resolve));
-    child.stdin.write(
-      JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n",
-    );
+    sendRaw(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
     return promise;
   }
 
@@ -185,8 +183,7 @@ async function withHarness(routes, fn) {
 test("tools/list exposes exactly the three pr_review tools", async () => {
   await withHarness(defaultRoutes(), async ({ client }) => {
     const res = await client.send("tools/list", {});
-    const names = res.result.tools.map((t) => t.name).sort();
-    assert.deepEqual(names, [
+    assert.deepEqual(res.result.tools.map((t) => t.name).sort(), [
       "add_comment",
       "reply_to_comment",
       "submit_review",
