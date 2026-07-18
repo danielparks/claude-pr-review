@@ -126,4 +126,48 @@ describe("pr_review MCP server (built dist/index.js)", () => {
       expect(tools.length).toBe(3);
     });
   }, 10_000);
+
+  it("surfaces an error thrown from a handler without crashing the server", async () => {
+    mock = await startMockGitHub([]);
+    await withServer(mock, async (client) => {
+      const result = await client.callTool({
+        name: "add_comment",
+        arguments: {
+          path: "foo.js",
+          body: "issue one",
+          startLine: 15,
+          line: 10,
+        },
+      });
+      expect(result.isError).toBe(true);
+
+      // The server is still usable after a rejected call.
+      const { tools } = await client.listTools();
+      expect(tools.length).toBe(3);
+    });
+  }, 10_000);
+
+  it("returns an error for an unknown tool", async () => {
+    mock = await startMockGitHub([]);
+    await withServer(mock, async (client) => {
+      expect((await client.callTool({ name: "invalid" })).isError).toBe(true);
+    });
+  }, 10_000);
+
+  it("responds with success to reply_to_comment", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "POST",
+        pattern: /\/pulls\/5\/comments\/123\/replies$/,
+        body: { id: 234, html_url: "https://example/pulls/5/comments/234" },
+      },
+    ]);
+    await withServer(mock, async (client) => {
+      const result = await client.callTool({
+        name: "reply_to_comment",
+        arguments: { comment_id: 123, body: "interesting reply" },
+      });
+      expect(JSON.parse(textOf(result)).success).toBe(true);
+    });
+  }, 10_000);
 });

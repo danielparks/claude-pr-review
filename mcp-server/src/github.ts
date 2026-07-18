@@ -54,7 +54,9 @@ export class GitHubClient {
     body: string,
   ): Promise<SubmittedReview> {
     const commit_id = await this.getHeadSha();
-    const { data } = await this.octokit.rest.pulls.createReview({
+    const {
+      data: { id, html_url },
+    } = await this.octokit.rest.pulls.createReview({
       owner: this.owner,
       repo: this.repo,
       pull_number: this.pullNumber,
@@ -63,18 +65,20 @@ export class GitHubClient {
       event: "COMMENT",
       comments,
     });
-    return { id: data.id, html_url: data.html_url };
+    return { id, html_url };
   }
 
   async createReply(commentId: number, body: string): Promise<PostedReply> {
-    const { data } = await this.octokit.rest.pulls.createReplyForReviewComment({
+    const {
+      data: { id, html_url },
+    } = await this.octokit.rest.pulls.createReplyForReviewComment({
       owner: this.owner,
       repo: this.repo,
       pull_number: this.pullNumber,
       comment_id: commentId,
       body,
     });
-    return { id: data.id, html_url: data.html_url };
+    return { id, html_url };
   }
 }
 

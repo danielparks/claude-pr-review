@@ -23,6 +23,4 @@ const github = new GitHubClient({
   ...(GITHUB_API_URL ? { baseUrl: GITHUB_API_URL } : {}),
 });
 
-const server = createServer(github);
-const transport = new StdioServerTransport();
-await server.connect(transport);
+await createServer(github).connect(new StdioServerTransport());

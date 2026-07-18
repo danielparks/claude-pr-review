@@ -117,4 +117,8 @@ describe("GitHubClient", () => {
       return true;
     });
   });
+
+  it("helpMessageFor() adds nothing for an unknown error", () => {
+    expect(helpMessageFor(new Error("???"))).toEqual("");
+  });
 });

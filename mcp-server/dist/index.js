@@ -27049,7 +27049,9 @@ var GitHubClient = class {
   }
   async createReview(comments, body) {
     const commit_id = await this.getHeadSha();
-    const { data } = await this.octokit.rest.pulls.createReview({
+    const {
+      data: { id, html_url }
+    } = await this.octokit.rest.pulls.createReview({
       owner: this.owner,
       repo: this.repo,
       pull_number: this.pullNumber,
@@ -27058,17 +27060,19 @@ var GitHubClient = class {
       event: "COMMENT",
       comments
     });
-    return { id: data.id, html_url: data.html_url };
+    return { id, html_url };
   }
   async createReply(commentId, body) {
-    const { data } = await this.octokit.rest.pulls.createReplyForReviewComment({
+    const {
+      data: { id, html_url }
+    } = await this.octokit.rest.pulls.createReplyForReviewComment({
       owner: this.owner,
       repo: this.repo,
       pull_number: this.pullNumber,
       comment_id: commentId,
       body
     });
-    return { id: data.id, html_url: data.html_url };
+    return { id, html_url };
   }
 };
 function helpMessageFor(error51) {
@@ -32656,11 +32660,11 @@ var Protocol = class {
    *
    * The Protocol object assumes ownership of the Transport, replacing any callbacks that have already been set, and expects that it is the only user of the Transport instance going forward.
    */
-  async connect(transport2) {
+  async connect(transport) {
     if (this._transport) {
       throw new Error("Already connected to a transport. Call close() before connecting to a new transport, or use a separate Protocol instance per connection.");
     }
-    this._transport = transport2;
+    this._transport = transport;
     const _onclose = this.transport?.onclose;
     this._transport.onclose = () => {
       _onclose?.();
@@ -34250,8 +34254,8 @@ var McpServer = class {
    *
    * The `server` object assumes ownership of the Transport, replacing any callbacks that have already been set, and expects that it is the only user of the Transport instance going forward.
    */
-  async connect(transport2) {
-    return await this.server.connect(transport2);
+  async connect(transport) {
+    return await this.server.connect(transport);
   }
   /**
    * Closes the connection.
@@ -35063,21 +35067,21 @@ function errorResult(error51) {
   };
 }
 function createServer(github2) {
-  const server2 = new McpServer({ name: "pr_review", version: "0.1.0" });
+  const server = new McpServer({ name: "pr_review", version: "0.1.0" });
   const batch = new ReviewBatch();
-  server2.registerTool(
+  server.registerTool(
     "add_comment",
     {
       description: "Queue an inline review comment on a specific line or lines of a file in this PR. Queued comments are NOT posted to GitHub until submit_review is called \u2014 call add_comment for every issue you find first, then call submit_review once at the end so all comments land together as a single grouped review.",
       inputSchema: {
-        path: external_exports.string().describe("File path to comment on, e.g. 'src/index.js'"),
-        body: external_exports.string().describe(
+        path: external_exports.string().min(1).describe("File path to comment on, e.g. 'src/index.js'"),
+        body: external_exports.string().min(1).describe(
           "Comment text (Markdown). For a code suggestion use a ```suggestion fenced block; it replaces the entire commented line range, so it must be a syntactically complete drop-in replacement."
         ),
-        line: external_exports.number().describe(
+        line: external_exports.number().min(1).describe(
           "The line number for a single-line comment, or the end line for a multi-line comment (used with startLine)."
         ),
-        startLine: external_exports.number().optional().describe(
+        startLine: external_exports.number().min(1).optional().describe(
           "Start line for a multi-line comment. Optional \u2014 omit for a single-line comment on `line`."
         ),
         side: external_exports.enum(["LEFT", "RIGHT"]).optional().describe(
@@ -35086,25 +35090,34 @@ function createServer(github2) {
       }
     },
     ({ path, body, line, startLine, side }) => {
-      const comment = {
-        path,
-        body: redactGitHubTokens(body),
-        side: side ?? "RIGHT",
-        line
-      };
-      if (startLine !== void 0) {
-        comment.start_line = startLine;
-        comment.start_side = side ?? "RIGHT";
+      try {
+        const comment = {
+          path,
+          body: redactGitHubTokens(body),
+          side: side ?? "RIGHT",
+          line
+        };
+        if (startLine !== void 0) {
+          if (startLine >= line) {
+            throw new Error(
+              `startLine (${startLine}) must be less than line (${line}) for a multi-line comment.`
+            );
+          }
+          comment.start_line = startLine;
+          comment.start_side = side ?? "RIGHT";
+        }
+        const count = batch.add(comment);
+        return ok({
+          queued: true,
+          count,
+          message: `Comment queued for ${path}` + (startLine !== void 0 ? ` lines ${startLine}-${line}` : ` line ${line}`) + ". Call submit_review when you're done adding comments."
+        });
+      } catch (error51) {
+        return errorResult(error51);
       }
-      const count = batch.add(comment);
-      return ok({
-        queued: true,
-        count,
-        message: `Comment queued for ${path}` + (startLine !== void 0 ? ` lines ${startLine}-${line}` : ` line ${line}`) + ". Call submit_review when you're done adding comments."
-      });
     }
   );
-  server2.registerTool(
+  server.registerTool(
     "submit_review",
     {
       description: "Submit all comments queued by add_comment as a single grouped GitHub review, optionally with top-level review text. Always call this exactly once after you've finished calling add_comment for every issue in this review pass \u2014 never submit one comment at a time. Can also be called with only a body and no queued comments for pure top-level feedback. Always posts as a plain comment review (never approves or requests changes).",
@@ -35116,53 +35129,41 @@ function createServer(github2) {
     },
     async ({ body }) => {
       const reviewBody = body ? redactGitHubTokens(body) : "";
-      let postedCount = 0;
       try {
-        const result = await batch.submit(
-          reviewBody,
-          (comments, submittedBody) => {
-            postedCount = comments.length;
-            return github2.createReview(comments, submittedBody);
-          }
+        return ok(
+          await batch.submit(reviewBody, async (comments, submittedBody) => ({
+            ...await github2.createReview(comments, submittedBody),
+            success: true,
+            comment_count: comments.length,
+            message: `Submitted one review with ${comments.length} inline comment(s).`
+          }))
         );
-        return ok({
-          success: true,
-          review_id: result.id,
-          html_url: result.html_url,
-          comment_count: postedCount,
-          message: `Submitted one review with ${postedCount} inline comment(s).`
-        });
       } catch (error51) {
         return errorResult(error51);
       }
     }
   );
-  server2.registerTool(
+  server.registerTool(
     "reply_to_comment",
     {
       description: "Reply to an existing PR review comment thread (the numeric comment id is shown in the PR discussion you were given). Posts immediately \u2014 replies attach to an existing thread, not a new review, so there's nothing to group.",
       inputSchema: {
-        comment_id: external_exports.number().describe("The id of the review comment to reply to."),
-        body: external_exports.string().describe("Reply text (Markdown).")
+        comment_id: external_exports.number().min(1).describe("The id of the review comment to reply to."),
+        body: external_exports.string().min(1).describe("Reply text (Markdown).")
       }
     },
     async ({ comment_id, body }) => {
       try {
-        const result = await github2.createReply(
-          comment_id,
-          redactGitHubTokens(body)
-        );
         return ok({
-          success: true,
-          comment_id: result.id,
-          html_url: result.html_url
+          ...await github2.createReply(comment_id, redactGitHubTokens(body)),
+          success: true
         });
       } catch (error51) {
         return errorResult(error51);
       }
     }
   );
-  return server2;
+  return server;
 }
 
 // src/index.ts
@@ -35180,9 +35181,7 @@ var github = new GitHubClient({
   pullNumber: Number(PR_NUMBER),
   ...GITHUB_API_URL ? { baseUrl: GITHUB_API_URL } : {}
 });
-var server = createServer(github);
-var transport = new StdioServerTransport();
-await server.connect(transport);
+await createServer(github).connect(new StdioServerTransport());
 /*! Bundled license information:
 
 content-type/dist/index.js:

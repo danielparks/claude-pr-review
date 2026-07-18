@@ -16,7 +16,5 @@ await build({
   logLevel: "info",
 });
 
-// Executable so it matches the old pr-review-server.js convention for local
-// testing (`./dist/index.js`); action.yaml itself invokes it via `node`, so
-// this isn't load-bearing there.
+// Executable for pre-commit check.
 chmodSync("dist/index.js", 0o755);

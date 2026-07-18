@@ -32,17 +32,19 @@ export function createServer(github: GitHubClient): McpServer {
     "add_comment",
     {
       description:
-        "Queue an inline review comment on a specific line or lines of a file " +
-        "in this PR. Queued comments are NOT posted to GitHub until " +
+        "Queue an inline review comment on a specific line or lines of a " +
+        "file in this PR. Queued comments are NOT posted to GitHub until " +
         "submit_review is called — call add_comment for every issue you find " +
         "first, then call submit_review once at the end so all comments land " +
         "together as a single grouped review.",
       inputSchema: {
         path: z
           .string()
+          .min(1)
           .describe("File path to comment on, e.g. 'src/index.js'"),
         body: z
           .string()
+          .min(1)
           .describe(
             "Comment text (Markdown). For a code suggestion use a " +
               "```suggestion fenced block; it replaces the entire commented " +
@@ -51,12 +53,14 @@ export function createServer(github: GitHubClient): McpServer {
           ),
         line: z
           .number()
+          .min(1)
           .describe(
             "The line number for a single-line comment, or the end line for " +
               "a multi-line comment (used with startLine).",
           ),
         startLine: z
           .number()
+          .min(1)
           .optional()
           .describe(
             "Start line for a multi-line comment. Optional — omit for a " +
@@ -71,28 +75,38 @@ export function createServer(github: GitHubClient): McpServer {
       },
     },
     ({ path, body, line, startLine, side }) => {
-      const comment: ReviewComment = {
-        path,
-        body: redactGitHubTokens(body),
-        side: side ?? "RIGHT",
-        line,
-      };
-      if (startLine !== undefined) {
-        comment.start_line = startLine;
-        comment.start_side = side ?? "RIGHT";
-      }
+      try {
+        const comment: ReviewComment = {
+          path,
+          body: redactGitHubTokens(body),
+          side: side ?? "RIGHT",
+          line,
+        };
+        if (startLine !== undefined) {
+          if (startLine >= line) {
+            throw new Error(
+              `startLine (${startLine}) must be less than line (${line}) for ` +
+                "a multi-line comment.",
+            );
+          }
+          comment.start_line = startLine;
+          comment.start_side = side ?? "RIGHT";
+        }
 
-      const count = batch.add(comment);
-      return ok({
-        queued: true,
-        count,
-        message:
-          `Comment queued for ${path}` +
-          (startLine !== undefined
-            ? ` lines ${startLine}-${line}`
-            : ` line ${line}`) +
-          ". Call submit_review when you're done adding comments.",
-      });
+        const count = batch.add(comment);
+        return ok({
+          queued: true,
+          count,
+          message:
+            `Comment queued for ${path}` +
+            (startLine !== undefined
+              ? ` lines ${startLine}-${line}`
+              : ` line ${line}`) +
+            ". Call submit_review when you're done adding comments.",
+        });
+      } catch (error) {
+        return errorResult(error);
+      }
     },
   );
 
@@ -118,22 +132,15 @@ export function createServer(github: GitHubClient): McpServer {
     },
     async ({ body }) => {
       const reviewBody = body ? redactGitHubTokens(body) : "";
-      let postedCount = 0;
       try {
-        const result = await batch.submit(
-          reviewBody,
-          (comments, submittedBody) => {
-            postedCount = comments.length;
-            return github.createReview(comments, submittedBody);
-          },
+        return ok(
+          await batch.submit(reviewBody, async (comments, submittedBody) => ({
+            ...(await github.createReview(comments, submittedBody)),
+            success: true,
+            comment_count: comments.length,
+            message: `Submitted one review with ${comments.length} inline comment(s).`,
+          })),
         );
-        return ok({
-          success: true,
-          review_id: result.id,
-          html_url: result.html_url,
-          comment_count: postedCount,
-          message: `Submitted one review with ${postedCount} inline comment(s).`,
-        });
       } catch (error) {
         return errorResult(error);
       }
@@ -144,27 +151,23 @@ export function createServer(github: GitHubClient): McpServer {
     "reply_to_comment",
     {
       description:
-        "Reply to an existing PR review comment thread (the numeric comment id " +
-        "is shown in the PR discussion you were given). Posts immediately — " +
-        "replies attach to an existing thread, not a new review, so there's " +
-        "nothing to group.",
+        "Reply to an existing PR review comment thread (the numeric comment " +
+        "id is shown in the PR discussion you were given). Posts immediately " +
+        "— replies attach to an existing thread, not a new review, so " +
+        "there's nothing to group.",
       inputSchema: {
         comment_id: z
           .number()
+          .min(1)
           .describe("The id of the review comment to reply to."),
-        body: z.string().describe("Reply text (Markdown)."),
+        body: z.string().min(1).describe("Reply text (Markdown)."),
       },
     },
     async ({ comment_id, body }) => {
       try {
-        const result = await github.createReply(
-          comment_id,
-          redactGitHubTokens(body),
-        );
         return ok({
+          ...(await github.createReply(comment_id, redactGitHubTokens(body))),
           success: true,
-          comment_id: result.id,
-          html_url: result.html_url,
         });
       } catch (error) {
         return errorResult(error);
