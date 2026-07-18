@@ -4,10 +4,15 @@ repos:
     hooks:
       - id: check-added-large-files
         args: ["--maxkb=1024"]
+        # mcp-server/dist/index.js is a deliberate, reviewed, committed
+        # esbuild bundle (see mcp-server/README.md) -- it's dependency-free
+        # by design, which is what makes it this size.
+        exclude: ^mcp-server/dist/
       - id: check-case-conflict
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
       - id: check-json
+        exclude: ^mcp-server/tsconfig\.json$
       - id: check-symlinks
       - id: check-toml
       - id: check-vcs-permalinks
@@ -30,12 +35,12 @@ repos:
         language: system
         entry: npx prettier --check
         pass_filenames: true
-        types_or: [javascript, json, markdown, yaml]
+        types_or: [javascript, typescript, json, markdown, yaml]
         stages: [pre-commit, pre-merge-commit]
-      - id: mcp-server-tests
-        name: mcp-server tests
+      - id: mcp-server-check
+        name: mcp-server-check
         language: system
-        entry: node --test --test-timeout=5000 mcp-server/*.test.js
+        entry: scripts/mcp-server-check
         pass_filenames: false
         files: ^mcp-server/
         stages: [pre-commit, pre-merge-commit]

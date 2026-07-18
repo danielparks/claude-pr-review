@@ -118,12 +118,13 @@ runs:
         REPO: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         GH_TOKEN: ${{ github.token }}
-        SCRIPT_PATH: ${{ github.action_path }}/mcp-server/pr-review-server.js
+        SCRIPT_PATH: ${{ github.action_path }}/mcp-server/dist/index.js
       run: |
         # Build the --mcp-config JSON for the pr_review server (see
-        # mcp-server/pr-review-server.js). This is what lets Claude group
-        # inline comments into a single review instead of scattering them
-        # across many.
+        # mcp-server/README.md). This is what lets Claude group inline
+        # comments into a single review instead of scattering them across
+        # many. dist/index.js is a committed, dependency-free bundle, so
+        # this just runs it directly -- no install step needed here.
         set -euo pipefail
 
         CONFIG=$(jq -nc \

@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 - Added `additional-allowed-tools` input.
 - Added input to configure [gh-pr-render] version.
 - Updated [gh-pr-render] to version 0.4.0 to render labels and reactions, and to use blockquotes to ensure that content is distinct from structure.
-- Added a bundled `pr_review` MCP server ([`mcp-server/pr-review-server.js`]) so Claude's review comments post as a single grouped GitHub review instead of one review per comment. [anthropics/claude-code-action]'s inline-comment tool always posts through GitHub's single-comment REST endpoint, which creates its own standalone review per call — no prompt wording can group those after the fact.
+- Added a bundled `pr_review` MCP server ([`mcp-server/`], TypeScript + [`@modelcontextprotocol/sdk`] + [`@octokit/rest`], built with esbuild to a committed `dist/index.js`) so Claude's review comments post as a single grouped GitHub review instead of one review per comment. [anthropics/claude-code-action]'s inline-comment tool always posts through GitHub's single-comment REST endpoint, which creates its own standalone review per call — no prompt wording can group those after the fact.
 - Added defaults for `initial-review-prompt` and `re-review-prompt` based on old example prompts.
 - Removed “resolve” from prompt defaults; Claude cannot actually resolve comments with the GitHub REST API.
 - Clarified re-review prompt to emphasize only adding comments if there were new changes or discussion.
@@ -22,7 +22,9 @@ All notable changes to this project will be documented in this file.
 
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
 [anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action
-[`mcp-server/pr-review-server.js`]: mcp-server/pr-review-server.js
+[`mcp-server/`]: mcp-server
+[`@modelcontextprotocol/sdk`]: https://github.com/modelcontextprotocol/typescript-sdk
+[`@octokit/rest`]: https://github.com/octokit/rest.js
 
 ## Release 1.0.2 (2026-06-12)
 
