@@ -35072,7 +35072,7 @@ function createServer(github2) {
   server.registerTool(
     "add_comment",
     {
-      description: "Queue an inline review comment on a specific line or lines of a file in this PR. Queued comments are NOT posted to GitHub until submit_review is called \u2014 call add_comment for every issue you find first, then call submit_review once at the end so all comments land together as a single grouped review.",
+      description: "Queue an inline comment on a specific line or lines of a file in this PR. Queued comments are NOT posted to GitHub until submit_review is called \u2014 call add_comment for every issue you find first, then call submit_review once at the end so all comments land together as a single grouped review.",
       inputSchema: {
         path: external_exports.string().min(1).describe("File path to comment on, e.g. 'src/index.js'"),
         body: external_exports.string().min(1).describe(
@@ -35146,9 +35146,9 @@ function createServer(github2) {
   server.registerTool(
     "reply_to_comment",
     {
-      description: "Reply to an existing PR review comment thread (the numeric comment id is shown in the PR discussion you were given). Posts immediately \u2014 replies attach to an existing thread, not a new review, so there's nothing to group.",
+      description: "Reply to an existing PR inline comment thread (the numeric comment id is shown in the PR discussion you were given). Posts immediately \u2014 replies attach to an existing thread, not a new review, so there's nothing to group.",
       inputSchema: {
-        comment_id: external_exports.number().min(1).describe("The id of the review comment to reply to."),
+        comment_id: external_exports.number().min(1).describe("The id of the inline comment to reply to."),
         body: external_exports.string().min(1).describe("Reply text (Markdown).")
       }
     },
