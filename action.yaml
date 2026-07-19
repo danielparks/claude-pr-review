@@ -31,27 +31,20 @@ inputs:
       This pull request has been updated. The PR discussion (including your
       prior review) and a diff of what changed since your last review are
       included below.
-
-      Respond to any new discussion.
-
-      If there are new changes, update your feedback to reflect the current
-      state of the PR:
-      - Update any comments that have been addressed.
-      - Flag any new issues introduced by the changes.
   prompt-suffix:
     description: >
       Appended to `initial-review-prompt` and `re-review-prompt`.
     default: |
-      - Call `mcp__pr_review__add_comment` for every specific code issue you
-        find. It only queues the comment — nothing is posted yet.
-      - When you're done, call `mcp__pr_review__submit_review` exactly once
-        so all queued comments post together as a single review. Pass
-        `body` for top-level feedback that isn't tied to a specific line;
-        you can call it with only `body` and no queued comments if you have
-        nothing to flag inline.
-      - Use `mcp__pr_review__reply_to_comment` to reply to existing diff
-        comments.
-      - Only post GitHub comments — don't submit review text as messages.
+      Only post GitHub comments — don't submit review text as messages.
+
+      1. Use `mcp__pr_review__reply_to_comment` to reply to existing review
+         comments if they need it.
+      2. Call `mcp__pr_review__add_comment` for new specific code issues you
+         find to queue a comment that will be included with your review.
+      3. If you have review comments queued, or you want to leave a top-level
+         comment, call `mcp__pr_review__submit_review` once. The `body`
+         parameter can be omitted if there is no need for a top-level comment;
+         all queued review comments will be posted together.
   additional-prompt-suffix:
     description: >
       Appended after `prompt-suffix`.

@@ -46,24 +46,20 @@ Prompt for when a prior Claude review exists. Defaults to:
     prior review) and a diff of what changed since your last review are
     included below.
 
-    Update your feedback to reflect the current state of the PR:
-    - Update any comments that have been addressed.
-    - Flag any new issues introduced by the changes.
-
 ### `prompt-suffix`
 
 Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
 
-    - Call `mcp__pr_review__add_comment` for every specific code issue you
-      find. It only queues the comment — nothing is posted yet.
-    - When you're done, call `mcp__pr_review__submit_review` exactly once
-      so all queued comments post together as a single review. Pass
-      `body` for top-level feedback that isn't tied to a specific line;
-      you can call it with only `body` and no queued comments if you have
-      nothing to flag inline.
-    - Use `mcp__pr_review__reply_to_comment` to reply to existing diff
-      comments.
-    - Only post GitHub comments — don't submit review text as messages.
+    Only post GitHub comments — don't submit review text as messages.
+
+    1. Use `mcp__pr_review__reply_to_comment` to reply to existing review
+       comments if they need it.
+    2. Call `mcp__pr_review__add_comment` for new specific code issues you
+       find to queue a comment that will be included with your review.
+    3. If you have review comments queued, or you want to leave a top-level
+       comment, call `mcp__pr_review__submit_review` once. The `body`
+       parameter can be omitted if there is no need for a top-level comment;
+       all queued review comments will be posted together.
 
 ### `additional-prompt-suffix`
 
@@ -107,13 +103,15 @@ Version of the [gh-pr-render] tool to use. Defaults to the latest version at the
 
 ### MCP tools
 
-This action bundles its own MCP server ([`mcp-server/`]) providing three tools, rather than using [anthropics/claude-code-action]'s built-in inline-comment tool. That upstream tool posts each inline comment through GitHub's single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one, the way GitHub's own “Start a review” button groups them. No amount of prompt tuning can fix that; it requires calling GitHub's array-based review endpoint instead.
+This action bundles its own MCP server providing three tools:
 
-- `mcp__pr_review__add_comment` queues an inline comment in memory. Nothing is posted to GitHub yet.
-- `mcp__pr_review__submit_review` posts everything queued by `add_comment`, plus an optional top-level `body`, as a single grouped review (`event: COMMENT` — it can never approve or request changes).
+- `mcp__pr_review__add_comment` queues an inline comment in memory. Nothing is posted to GitHub until `submit_review` is called.
+- `mcp__pr_review__submit_review` posts everything queued by `add_comment`, plus an optional top-level `body`, as a single grouped comment review (it cannot approve or request changes).
 - `mcp__pr_review__reply_to_comment` replies to an existing diff comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
 
-The server itself is TypeScript ([`@modelcontextprotocol/sdk`], [`zod`], [`@octokit/rest`]), bundled with [esbuild] to a single committed, dependency-free `mcp-server/dist/index.js` that `action.yaml` runs directly with `node` — see [`mcp-server/README.md`] for why that's committed rather than published or built at action-run time, and for the dev/test commands.
+[anthropics/claude-code-action]'s built-in inline-comment tool posts each inline comment through GitHub's single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.
+
+The server itself is TypeScript, bundled with [esbuild] to a single committed, dependency-free `mcp-server/dist/index.js` that `action.yaml` runs directly — see [`mcp-server/README.md`] for details.
 
 ### PR updates
 
@@ -125,9 +123,5 @@ If the changes are not identical then this provides Claude with a diff-of-diffs 
 [workflow-review.yaml]: workflow-review.yaml
 [workflow-response.yaml]: workflow-response.yaml
 [anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action
-[`mcp-server/`]: mcp-server
 [`mcp-server/README.md`]: mcp-server/README.md
-[`@modelcontextprotocol/sdk`]: https://github.com/modelcontextprotocol/typescript-sdk
-[`zod`]: https://zod.dev
-[`@octokit/rest`]: https://github.com/octokit/rest.js
 [esbuild]: https://esbuild.github.io/
