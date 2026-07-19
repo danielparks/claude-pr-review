@@ -1,7 +1,7 @@
 import type { ReviewComment } from "./types.js";
 
 /**
- * Queues review comments and flushes them as a single atomic post.
+ * Queues inline comments and flushes them as a single atomic post.
  *
  * `add()` is synchronous and immediate — pushing to an array can't race with
  * itself no matter how it's called. `submit()` validates, snapshots, and

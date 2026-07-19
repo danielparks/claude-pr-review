@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+# Used to run prettier in CI.
+
+npm exec --yes --prefix $(mktemp -d) --package=prettier -- prettier "$@"

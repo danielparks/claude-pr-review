@@ -34,7 +34,7 @@ repos:
       - id: prettier
         name: prettier
         language: system
-        entry: npx prettier --check
+        entry: scripts/format --check
         pass_filenames: true
         types_or: [javascript, ts, json, markdown, yaml]
         stages: [pre-commit, pre-merge-commit]
