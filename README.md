@@ -52,14 +52,15 @@ Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
 
     Only post GitHub comments — don't submit review text as messages.
 
-    1. Use `mcp__pr_review__reply_to_comment` to reply to existing review
+    1. Use `mcp__pr_review__reply_to_comment` to reply to existing inline
        comments if they need it.
-    2. Call `mcp__pr_review__add_comment` for new specific code issues you
-       find to queue a comment that will be included with your review.
-    3. If you have review comments queued, or you want to leave a top-level
+    2. Call `mcp__pr_review__add_comment` to add inline comments for new
+       specific code issues you find. The comments will be queued and only
+       posted when you call `submit_review`.
+    3. If you have inline comments queued, or you want to leave a top-level
        comment, call `mcp__pr_review__submit_review` once. The `body`
        parameter can be omitted if there is no need for a top-level comment;
-       all queued review comments will be posted together.
+       all queued inline comments will be posted together.
 
 ### `additional-prompt-suffix`
 
@@ -107,7 +108,7 @@ This action bundles its own MCP server providing three tools:
 
 - `mcp__pr_review__add_comment` queues an inline comment in memory. Nothing is posted to GitHub until `submit_review` is called.
 - `mcp__pr_review__submit_review` posts everything queued by `add_comment`, plus an optional top-level `body`, as a single grouped comment review (it cannot approve or request changes).
-- `mcp__pr_review__reply_to_comment` replies to an existing diff comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
+- `mcp__pr_review__reply_to_comment` replies to an existing inline comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
 
 [anthropics/claude-code-action]'s built-in inline-comment tool posts each inline comment through GitHub's single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.
 

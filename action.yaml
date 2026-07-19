@@ -37,14 +37,15 @@ inputs:
     default: |
       Only post GitHub comments — don't submit review text as messages.
 
-      1. Use `mcp__pr_review__reply_to_comment` to reply to existing review
+      1. Use `mcp__pr_review__reply_to_comment` to reply to existing inline
          comments if they need it.
-      2. Call `mcp__pr_review__add_comment` for new specific code issues you
-         find to queue a comment that will be included with your review.
-      3. If you have review comments queued, or you want to leave a top-level
+      2. Call `mcp__pr_review__add_comment` to add inline comments for new
+         specific code issues you find. The comments will be queued and only
+         posted when you call `submit_review`.
+      3. If you have inline comments queued, or you want to leave a top-level
          comment, call `mcp__pr_review__submit_review` once. The `body`
          parameter can be omitted if there is no need for a top-level comment;
-         all queued review comments will be posted together.
+         all queued inline comments will be posted together.
   additional-prompt-suffix:
     description: >
       Appended after `prompt-suffix`.

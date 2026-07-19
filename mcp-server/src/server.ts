@@ -32,8 +32,8 @@ export function createServer(github: GitHubClient): McpServer {
     "add_comment",
     {
       description:
-        "Queue an inline review comment on a specific line or lines of a " +
-        "file in this PR. Queued comments are NOT posted to GitHub until " +
+        "Queue an inline comment on a specific line or lines of a file in " +
+        "this PR. Queued comments are NOT posted to GitHub until " +
         "submit_review is called — call add_comment for every issue you find " +
         "first, then call submit_review once at the end so all comments land " +
         "together as a single grouped review.",
@@ -151,7 +151,7 @@ export function createServer(github: GitHubClient): McpServer {
     "reply_to_comment",
     {
       description:
-        "Reply to an existing PR review comment thread (the numeric comment " +
+        "Reply to an existing PR inline comment thread (the numeric comment " +
         "id is shown in the PR discussion you were given). Posts immediately " +
         "— replies attach to an existing thread, not a new review, so " +
         "there's nothing to group.",
@@ -159,7 +159,7 @@ export function createServer(github: GitHubClient): McpServer {
         comment_id: z
           .number()
           .min(1)
-          .describe("The id of the review comment to reply to."),
+          .describe("The id of the inline comment to reply to."),
         body: z.string().min(1).describe("Reply text (Markdown)."),
       },
     },
