@@ -1,0 +1,23 @@
+{
+  "name": "pr-review-cli",
+  "version": "0.1.0",
+  "description": "CLI Claude uses (via its Bash tool) to post PR review comments as claude[bot] for danielparks/claude-pr-review",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint",
+    "format": "prettier --write .",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20.18.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.7.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.5",
+    "vitest": "^4.1.10"
+  }
+}

@@ -10,7 +10,7 @@ const TOKEN_PATTERNS = [
   /\bgithub_pat_[A-Za-z0-9_]{11,221}\b/g,
 ];
 
-export function redactGitHubTokens(content: string): string {
+export function redactGitHubTokens(content) {
   return TOKEN_PATTERNS.reduce(
     (text, pattern) => text.replace(pattern, "[REDACTED_GITHUB_TOKEN]"),
     content,

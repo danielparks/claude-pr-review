@@ -1,3 +1,2 @@
 # ignore for rg and friends
-dist/
 package-lock.json

@@ -37,15 +37,21 @@ inputs:
     default: |
       Only post GitHub comments — don't submit review text as messages.
 
-      1. Use `mcp__pr_review__reply_to_comment` to reply to existing inline
-         comments if they need it.
-      2. Call `mcp__pr_review__add_comment` to add inline comments for new
-         specific code issues you find. The comments will be queued and only
-         posted when you call `submit_review`.
-      3. If you have inline comments queued, or you want to leave a top-level
-         comment, call `mcp__pr_review__submit_review` once. The `body`
-         parameter can be omitted if there is no need for a top-level comment;
-         all queued inline comments will be posted together.
+      For each comment or reply body: write it to a file under /tmp first
+      (e.g. with the Write tool), then pass that file's path with
+      `--body-file` — don't pass comment text directly as a shell argument.
+
+      1. Use `post-review reply --comment-id ID --body-file PATH` to reply to
+         existing inline comments if they need it. This posts immediately.
+      2. Use `post-review queue-comment --path PATH --line N --body-file PATH`
+         for every specific code issue you find in new code. This only
+         queues the comment; nothing is posted yet.
+      3. If you have comments queued, or want to leave top-level feedback,
+         call `post-review submit --body-file PATH` once at the end. Omit
+         `--body-file` if you have nothing to say beyond the inline comments.
+         You don't have to call this if you only queued comments and have no
+         top-level feedback — anything queued is still posted as one grouped
+         review even if you never call submit yourself.
   additional-prompt-suffix:
     description: >
       Appended after `prompt-suffix`.
@@ -60,10 +66,8 @@ inputs:
       List of tools to allow Claude to use, one per line. Passed to
       `--allowedTools`.
     default: |
-      mcp__pr_review__add_comment
-      mcp__pr_review__submit_review
-      mcp__pr_review__reply_to_comment
       Read
+      Write(/tmp/**)
       Bash(find:*)
       Bash(grep:*)
       Bash(git log:*)
@@ -73,6 +77,9 @@ inputs:
       Bash(gh pr view:*)
       Bash(gh run list:*)
       Bash(gh run view:*)
+      Bash(post-review queue-comment:*)
+      Bash(post-review reply:*)
+      Bash(post-review submit:*)
   additional-allowed-tools:
     description: >
       List of additional tools to allow Claude to use, one per line. Added to
@@ -105,44 +112,23 @@ runs:
             | sed 's/,$//' \
           )" >> "$GITHUB_OUTPUT"
 
-    - name: Build MCP config
-      id: mcp
+    - name: Configure post-review CLI
       shell: bash
       env:
-        REPO: ${{ github.repository }}
+        CLI_DIR: ${{ github.action_path }}/cli
         PR_NUMBER: ${{ github.event.pull_request.number }}
-        GH_TOKEN: ${{ github.token }}
-        SCRIPT_PATH: ${{ github.action_path }}/mcp-server/dist/index.js
       run: |
-        # Build the --mcp-config JSON for the pr_review server (see
-        # mcp-server/README.md). This is what lets Claude group inline
-        # comments into a single review instead of scattering them across
-        # many. dist/index.js is a committed, dependency-free bundle, so
-        # this just runs it directly -- no install step needed here.
+        # Put post-review (see cli/README.md) on PATH for Claude's Bash tool,
+        # and expose PR_NUMBER as an ambient env var -- both $GITHUB_PATH and
+        # $GITHUB_ENV apply to every later step in this job, including the
+        # Claude Code Action step below and whatever it spawns. GITHUB_TOKEN
+        # is *not* set here: post-review relies on inheriting the real token
+        # (the Claude App token, if available) from whatever env Claude's own
+        # Bash-tool subprocess already runs with -- see cli/README.md for why
+        # that's different from (and more than) what an MCP server gets.
         set -euo pipefail
-
-        CONFIG=$(jq -nc \
-          --arg script "$SCRIPT_PATH" \
-          --arg owner "${REPO%%/*}" \
-          --arg repo "${REPO#*/}" \
-          --arg pr "$PR_NUMBER" \
-          --arg token "$GH_TOKEN" \
-          '{
-            mcpServers: {
-              pr_review: {
-                command: "node",
-                args: [$script],
-                env: {
-                  GITHUB_TOKEN: $token,
-                  REPO_OWNER: $owner,
-                  REPO_NAME: $repo,
-                  PR_NUMBER: $pr
-                }
-              }
-            }
-          }')
-
-        echo "config=$CONFIG" >> "$GITHUB_OUTPUT"
+        echo "$CLI_DIR" >> "$GITHUB_PATH"
+        echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
 
     - name: diff cache
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -260,6 +246,7 @@ runs:
         } >> "$GITHUB_OUTPUT"
 
     - uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e # v1.0.123
+      id: claude
       if: steps.diff.outputs.skip != 'true'
       with:
         anthropic_api_key: ${{ inputs.anthropic-api-key }}
@@ -276,4 +263,19 @@ runs:
           ${{ steps.diff.outputs.diff_section }}
 
           ${{ steps.render.outputs.pr_context }}
-        claude_args: --allowedTools "${{ steps.tools.outputs.list }}" --mcp-config '${{ steps.mcp.outputs.config }}'
+        claude_args: --allowedTools "${{ steps.tools.outputs.list }}"
+
+    - name: Submit any review comments Claude queued but didn't post
+      # Runs even if the step above failed or Claude never called `submit`
+      # itself -- see cli/README.md for why this is safe to always attempt
+      # (it's a no-op when nothing was ever queued).
+      if: always() && steps.diff.outputs.skip != 'true'
+      shell: bash
+      env:
+        # The Claude App token, if the calling workflow granted `id-token:
+        # write` and the app is installed -- the same token post-review
+        # relies on inheriting during the run above, exposed here as this
+        # step's own credential now that Claude's session has ended.
+        GITHUB_TOKEN: ${{ steps.claude.outputs.github_token }}
+        CLI_SCRIPT: ${{ github.action_path }}/cli/post-review
+      run: node "$CLI_SCRIPT" sweep

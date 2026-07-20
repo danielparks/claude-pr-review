@@ -52,15 +52,21 @@ Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
 
     Only post GitHub comments — don't submit review text as messages.
 
-    1. Use `mcp__pr_review__reply_to_comment` to reply to existing inline
-       comments if they need it.
-    2. Call `mcp__pr_review__add_comment` to add inline comments for new
-       specific code issues you find. The comments will be queued and only
-       posted when you call `submit_review`.
-    3. If you have inline comments queued, or you want to leave a top-level
-       comment, call `mcp__pr_review__submit_review` once. The `body`
-       parameter can be omitted if there is no need for a top-level comment;
-       all queued inline comments will be posted together.
+    For each comment or reply body: write it to a file under /tmp first
+    (e.g. with the Write tool), then pass that file's path with
+    `--body-file` — don't pass comment text directly as a shell argument.
+
+    1. Use `post-review reply --comment-id ID --body-file PATH` to reply to
+       existing inline comments if they need it. This posts immediately.
+    2. Use `post-review queue-comment --path PATH --line N --body-file PATH`
+       for every specific code issue you find in new code. This only
+       queues the comment; nothing is posted yet.
+    3. If you have comments queued, or want to leave top-level feedback,
+       call `post-review submit --body-file PATH` once at the end. Omit
+       `--body-file` if you have nothing to say beyond the inline comments.
+       You don't have to call this if you only queued comments and have no
+       top-level feedback — anything queued is still posted as one grouped
+       review even if you never call submit yourself.
 
 ### `additional-prompt-suffix`
 
@@ -76,10 +82,8 @@ GitHub username of the bot; used to detect prior reviews. Defaults to “claude�
 
 List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. Defaults to:
 
-    mcp__pr_review__add_comment
-    mcp__pr_review__submit_review
-    mcp__pr_review__reply_to_comment
     Read
+    Write(/tmp/**)
     Bash(find:*)
     Bash(grep:*)
     Bash(git log:*)
@@ -89,6 +93,9 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(gh pr view:*)
     Bash(gh run list:*)
     Bash(gh run view:*)
+    Bash(post-review queue-comment:*)
+    Bash(post-review reply:*)
+    Bash(post-review submit:*)
 
 ### `additional-allowed-tools`
 
@@ -102,17 +109,17 @@ Version of the [gh-pr-render] tool to use. Defaults to the latest version at the
 
 ## Details
 
-### MCP tools
+### Posting review comments
 
-This action bundles its own MCP server providing three tools:
+This action bundles its own CLI tool, [`cli/post-review`], that `action.yaml` puts on `PATH` for Claude to run via its Bash tool:
 
-- `mcp__pr_review__add_comment` queues an inline comment in memory. Nothing is posted to GitHub until `submit_review` is called.
-- `mcp__pr_review__submit_review` posts everything queued by `add_comment`, plus an optional top-level `body`, as a single grouped comment review (it cannot approve or request changes).
-- `mcp__pr_review__reply_to_comment` replies to an existing inline comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
+- `post-review queue-comment` queues an inline comment on disk. Nothing is posted to GitHub until `submit` is called.
+- `post-review submit` posts everything queued by `queue-comment`, plus an optional top-level body, as a single grouped comment review (it cannot approve or request changes). Claude doesn't have to call this itself — `action.yaml` runs it automatically after Claude's turn ends if anything is still queued.
+- `post-review reply` replies to an existing inline comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
 
 [anthropics/claude-code-action]'s built-in inline-comment tool posts each inline comment through GitHub's single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.
 
-The server itself is TypeScript, bundled with [esbuild] to a single committed, dependency-free `mcp-server/dist/index.js` that `action.yaml` runs directly — see [`mcp-server/README.md`] for details.
+This is a Bash-invoked CLI tool rather than an MCP server so that it can post as `claude[bot]` instead of `github-actions[bot]`: the Claude App token only reaches subprocesses that inherit [anthropics/claude-code-action]'s real environment, which a Bash-tool call does and an MCP server does not. It's plain, dependency-free JavaScript that `action.yaml` runs directly with no build step — see [`cli/README.md`] for the full reasoning and how the on-disk comment queue avoids needing any locking.
 
 ### PR updates
 
@@ -124,5 +131,5 @@ If the changes are not identical then this provides Claude with a diff-of-diffs 
 [workflow-review.yaml]: workflow-review.yaml
 [workflow-response.yaml]: workflow-response.yaml
 [anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action
-[`mcp-server/README.md`]: mcp-server/README.md
-[esbuild]: https://esbuild.github.io/
+[`cli/post-review`]: cli/post-review
+[`cli/README.md`]: cli/README.md

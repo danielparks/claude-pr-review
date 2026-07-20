@@ -1,28 +1,12 @@
-import { createServer, type Server } from "node:http";
+import { createServer } from "node:http";
 
-export type MockRoute = {
-  method: string;
-  pattern: RegExp;
-  status?: number;
-  body: unknown;
-};
-
-export type CapturedRequest = { method: string; url: string; body: unknown };
-
-export interface MockGitHub {
-  server: Server;
-  baseUrl: string;
-  requests: CapturedRequest[];
-  close: () => Promise<void>;
-}
-
-export function startMockGitHub(routes: MockRoute[]): Promise<MockGitHub> {
-  const requests: CapturedRequest[] = [];
+export function startMockGitHub(routes) {
+  const requests = [];
   const server = createServer((req, res) => {
     let raw = "";
-    req.on("data", (chunk: Buffer) => (raw += chunk));
+    req.on("data", (chunk) => (raw += chunk));
     req.on("end", () => {
-      const body: unknown = raw ? JSON.parse(raw) : null;
+      const body = raw ? JSON.parse(raw) : null;
       const url = req.url ?? "";
       requests.push({ method: req.method ?? "", url, body });
 

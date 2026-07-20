@@ -4,15 +4,10 @@ repos:
     hooks:
       - id: check-added-large-files
         args: ["--maxkb=1024"]
-        # mcp-server/dist/index.js is a deliberate, reviewed, committed
-        # esbuild bundle (see mcp-server/README.md) -- it's dependency-free
-        # by design, which is what makes it this size.
-        exclude: ^mcp-server/dist/
       - id: check-case-conflict
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
       - id: check-json
-        exclude: ^mcp-server/tsconfig\.json$
       - id: check-symlinks
       - id: check-toml
       - id: check-vcs-permalinks
@@ -28,7 +23,6 @@ repos:
     hooks:
       - id: typos
         args: []
-        exclude: "mcp-server/dist/"
   - repo: local
     hooks:
       - id: prettier
@@ -38,12 +32,12 @@ repos:
         pass_filenames: true
         types_or: [javascript, ts, json, markdown, yaml]
         stages: [pre-commit, pre-merge-commit]
-      - id: mcp-server-check
-        name: mcp-server-check
+      - id: cli-check
+        name: cli-check
         language: system
-        entry: scripts/mcp-server-check
+        entry: scripts/cli-check
         pass_filenames: false
-        files: ^mcp-server/
+        files: ^cli/
         stages: [pre-commit, pre-merge-commit]
       - id: generate-workflows
         name: generate-workflows

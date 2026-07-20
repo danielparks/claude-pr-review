@@ -1,0 +1,259 @@
+#!/usr/bin/env node
+// CLI Claude invokes directly via its Bash tool to post PR review comments as
+// claude[bot]. This only works via Bash — an MCP server spawned by the
+// Claude CLI never receives the real GITHUB_TOKEN (the MCP SDK's stdio
+// transport spawns servers with a fixed safe env allowlist, not the parent's
+// real environment), whereas a Bash-tool subprocess inherits it normally.
+// See ../README.md for the full reasoning.
+import { parseArgs } from "node:util";
+import { readFile } from "node:fs/promises";
+import {
+  claim,
+  listClaimed,
+  markPosted,
+  queueComment,
+  queueRoot,
+  readBatch,
+  setBody,
+} from "./lib/queue.js";
+import { apiErrorHint, createReply, createReview } from "./lib/github.js";
+import { redactGitHubTokens } from "./lib/redact.js";
+
+class CliError extends Error {}
+
+function fail(message) {
+  throw new CliError(message);
+}
+
+function requireToken() {
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (!token) {
+    fail("GITHUB_TOKEN or GH_TOKEN environment variable is required");
+  }
+  return token;
+}
+
+function repoFromEnv() {
+  const repo = process.env.GITHUB_REPOSITORY ?? "";
+  const match = /^([^/]+)\/([^/]+)$/.exec(repo);
+  if (!match) {
+    fail(
+      "GITHUB_REPOSITORY environment variable must be in owner/repo form, " +
+        `got: ${JSON.stringify(repo)}`,
+    );
+  }
+  const [, owner, name] = match;
+  return { owner, repo: name };
+}
+
+function prNumberFromEnv() {
+  return positiveInt(process.env.PR_NUMBER, "PR_NUMBER environment variable");
+}
+
+function positiveInt(value, label) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1) {
+    fail(`${label} must be a positive integer, got: ${value}`);
+  }
+  return n;
+}
+
+async function readBodyFile(filePath, { required }) {
+  if (!filePath) {
+    if (required) fail("--body-file is required");
+    return "";
+  }
+  const raw = await readFile(filePath, "utf8");
+  const body = redactGitHubTokens(raw);
+  if (required && !body.trim()) {
+    fail(`--body-file (${filePath}) is empty`);
+  }
+  return body;
+}
+
+async function cmdQueueComment(args) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      path: { type: "string" },
+      line: { type: "string" },
+      "start-line": { type: "string" },
+      side: { type: "string" },
+      "body-file": { type: "string" },
+    },
+  });
+  if (!values.path) fail("--path is required");
+  if (!values.line) fail("--line is required");
+
+  const line = positiveInt(values.line, "--line");
+  const side = values.side ?? "RIGHT";
+  if (side !== "LEFT" && side !== "RIGHT") {
+    fail(`--side must be LEFT or RIGHT, got: ${values.side}`);
+  }
+  const body = await readBodyFile(values["body-file"], { required: true });
+
+  const comment = { path: values.path, body, side, line };
+  if (values["start-line"] !== undefined) {
+    const startLine = positiveInt(values["start-line"], "--start-line");
+    if (startLine >= line) {
+      fail(`--start-line (${startLine}) must be less than --line (${line})`);
+    }
+    comment.start_line = startLine;
+    comment.start_side = side;
+  }
+
+  const root = queueRoot();
+  const file = await queueComment(root, comment);
+  const range =
+    comment.start_line !== undefined
+      ? `lines ${comment.start_line}-${line}`
+      : `line ${line}`;
+  console.log(
+    `Queued comment for ${values.path} ${range} (${file}). ` +
+      "Call 'submit' when you're done adding comments.",
+  );
+}
+
+async function cmdReply(args) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      "comment-id": { type: "string" },
+      "body-file": { type: "string" },
+    },
+  });
+  if (!values["comment-id"]) fail("--comment-id is required");
+  const commentId = positiveInt(values["comment-id"], "--comment-id");
+  const body = await readBodyFile(values["body-file"], { required: true });
+
+  const token = requireToken();
+  const { owner, repo } = repoFromEnv();
+  const pr = prNumberFromEnv();
+  try {
+    const result = await createReply(token, owner, repo, pr, commentId, body);
+    console.log(`Posted reply: ${result.html_url}`);
+  } catch (error) {
+    fail(`${error.message}${apiErrorHint(error)}`);
+  }
+}
+
+/** Post one already-claimed batch; mark it posted on success. */
+async function postClaimedBatch(claimedDir) {
+  const { comments, body } = await readBatch(claimedDir);
+  if (comments.length === 0 && !body) {
+    // Nothing worth posting (shouldn't normally happen) -- just tidy up.
+    await markPosted(claimedDir);
+    return { comments, skipped: true };
+  }
+
+  const token = requireToken();
+  const { owner, repo } = repoFromEnv();
+  const pr = prNumberFromEnv();
+  const result = await createReview(token, owner, repo, pr, comments, body);
+  await markPosted(claimedDir);
+  return { comments, result };
+}
+
+async function cmdSubmit(args) {
+  const { values } = parseArgs({
+    args,
+    options: { "body-file": { type: "string" } },
+  });
+  const root = queueRoot();
+  if (values["body-file"]) {
+    const body = await readBodyFile(values["body-file"], { required: false });
+    await setBody(root, body);
+  }
+
+  const claimedDir = await claim(root);
+  if (!claimedDir) {
+    fail(
+      "Nothing to submit: call queue-comment first, or pass --body-file for " +
+        "top-level-only feedback.",
+    );
+  }
+
+  const { comments, result, skipped } = await postClaimedBatch(claimedDir);
+  if (skipped) {
+    console.log("Nothing to submit.");
+  } else {
+    console.log(
+      `Submitted review with ${comments.length} inline comment(s): ${result.html_url}`,
+    );
+  }
+}
+
+/**
+ * Invoked by the deferred fallback step after Claude's run ends, not by
+ * Claude itself. Idempotent no matter how many times it runs or what state
+ * it finds: posts anything Claude queued but never submitted, retries any
+ * abandoned in-flight attempt from a crashed submit, and leaves already-
+ * posted batches alone.
+ */
+async function cmdSweep() {
+  const root = queueRoot();
+  let handled = 0;
+  let failed = 0;
+
+  const liveClaim = await claim(root);
+  if (liveClaim) {
+    console.log(`Found un-submitted comments queued at ${liveClaim}.`);
+    if (await trySubmit(liveClaim)) handled++;
+    else failed++;
+  }
+
+  for (const dir of await listClaimed(root)) {
+    console.error(
+      `::warning::Retrying abandoned review submission from ${dir}`,
+    );
+    if (await trySubmit(dir)) handled++;
+    else failed++;
+  }
+
+  if (handled === 0 && failed === 0) {
+    console.log("Nothing to sweep.");
+  } else {
+    console.log(
+      `Swept ${handled} pending submission(s), ${failed} failure(s).`,
+    );
+  }
+  if (failed > 0) process.exitCode = 1;
+}
+
+async function trySubmit(claimedDir) {
+  try {
+    await postClaimedBatch(claimedDir);
+    return true;
+  } catch (error) {
+    console.error(
+      `::error::Failed to submit queued review from ${claimedDir}: ` +
+        `${error.message}${apiErrorHint(error)}`,
+    );
+    return false;
+  }
+}
+
+const COMMANDS = {
+  "queue-comment": cmdQueueComment,
+  reply: cmdReply,
+  submit: cmdSubmit,
+  sweep: cmdSweep,
+};
+
+async function main() {
+  const [, , command, ...rest] = process.argv;
+  const handler = COMMANDS[command];
+  if (!handler) {
+    fail(
+      `Unknown command: ${command ?? "(none)"}. Expected one of: ` +
+        Object.keys(COMMANDS).join(", "),
+    );
+  }
+  await handler(rest);
+}
+
+main().catch((error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`Error: ${message}`);
+  process.exit(1);
+});
