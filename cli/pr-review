@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-// CLI Claude invokes directly via its Bash tool to post PR review comments as
-// claude[bot]. This only works via Bash — an MCP server spawned by the
-// Claude CLI never receives the real GITHUB_TOKEN (the MCP SDK's stdio
+
+// Post PR review comments as claude[bot].
+//
+// This is a command line tool because the Bash tool provides the Anthropic
+// GitHub token that allows posting as claude[bot]. An MCP server spawned by the
+// Claude CLI never receives the real GITHUB_TOKEN because the MCP SDK's stdio
 // transport spawns servers with a fixed safe env allowlist, not the parent's
-// real environment), whereas a Bash-tool subprocess inherits it normally.
-// See ../README.md for the full reasoning.
+// real environment. See ./README.md for more information.
+
 import { parseArgs } from "node:util";
 import { readFile } from "node:fs/promises";
 import {
@@ -141,15 +144,18 @@ async function cmdReply(args) {
 /** Post one already-claimed batch; mark it posted on success. */
 async function postClaimedBatch(claimedDir) {
   const { comments, body } = await readBatch(claimedDir);
+  const token = requireToken();
+  const { owner, repo } = repoFromEnv();
+  const pr = prNumberFromEnv();
+
+  // This happens after validating the basics for consistency. It should always
+  // fail if the token is missing or the PR number isn’t a number.
   if (comments.length === 0 && !body) {
     // Nothing worth posting (shouldn't normally happen) -- just tidy up.
     await markPosted(claimedDir);
     return { comments, skipped: true };
   }
 
-  const token = requireToken();
-  const { owner, repo } = repoFromEnv();
-  const pr = prNumberFromEnv();
   const result = await createReview(token, owner, repo, pr, comments, body);
   await markPosted(claimedDir);
   return { comments, result };
