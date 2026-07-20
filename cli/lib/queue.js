@@ -6,9 +6,9 @@
 // States, encoded entirely in directory names so a fresh process can always
 // tell what state a batch is in without reading any file content:
 //
-//   comments/                          open — Claude is still queuing
-//   comments.claimed-<ts>-<pid>/       an attempt is in flight (or crashed)
-//   comments.posted-<ts>-<pid>/        confirmed posted — terminal, ignorable
+//   comments/                           open — Claude is still queuing
+//   comments.claimed-<ts>-<pid>-<uuid>/ an attempt is in flight (or crashed)
+//   comments.posted-<ts>-<pid>-<uuid>/  confirmed posted — terminal, ignorable
 //
 // Queuing a comment only ever creates a brand-new, uniquely-named file, so
 // there's nothing to lock: two concurrent queue-comment calls can never
@@ -72,7 +72,7 @@ export async function claim(root) {
   const dir = commentsDir(root);
   const claimed = path.join(
     root,
-    `comments.claimed-${Date.now()}-${process.pid}`,
+    `comments.claimed-${Date.now()}-${process.pid}-${randomUUID()}`,
   );
   try {
     await rename(dir, claimed);

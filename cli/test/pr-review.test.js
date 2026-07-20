@@ -302,7 +302,7 @@ describe("pr-review CLI", () => {
     // happens inside `claim()`) and then crashed before the POST -- exactly
     // the state a real crash would leave behind, without needing to
     // actually kill a process mid-request.
-    const claimedDir = path.join(queueDir, "comments.claimed-1-999");
+    const claimedDir = path.join(queueDir, "comments.claimed-1-999-123abc");
     await mkdir(claimedDir, { recursive: true });
     await writeFile(
       path.join(claimedDir, "1-abc.json"),

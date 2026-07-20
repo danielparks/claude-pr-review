@@ -16,7 +16,7 @@ This has zero runtime dependencies — it's plain JavaScript using the built-in 
 
 Comments are queued as one file per comment (`$RUNNER_TEMP/pr-review-queue/comments/<timestamp>-<uuid>.json`) rather than held in memory, because `pr-review` is a fresh process on every invocation — there's no long-lived server to hold state. Each `queue-comment` call only ever creates a new, uniquely-named file, so concurrent invocations can never collide; there's nothing to lock.
 
-`submit` claims the batch with a single atomic rename (`comments/` → `comments.claimed-<ts>-<pid>/`), posts it as one grouped review, and renames it again to `comments.posted-<ts>-<pid>/` only after a confirmed-successful response. All three states are encoded in the directory name, so a completely separate process — the deferred `sweep` step `action.yaml` runs after Claude's turn ends — can always tell what happened without reading any file content:
+`submit` claims the batch with a single atomic rename (`comments/` → `comments.claimed-<ts>-<pid>-<uuid>/`), posts it as one grouped review, and renames it again to `comments.posted-<ts>-<pid>-<uuid>/` only after a confirmed-successful response. All three states are encoded in the directory name, so a completely separate process — the deferred `sweep` step `action.yaml` runs after Claude's turn ends — can always tell what happened without reading any file content:
 
 - `comments/` still exists → Claude queued things but never called `submit`; sweep claims and posts it. This is what lets Claude skip calling `submit` at all when it has nothing to add beyond the inline comments.
 - `comments.claimed-*/` exists → a `submit` call claimed a batch and then crashed before confirming success; sweep retries it.
