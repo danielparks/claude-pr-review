@@ -56,12 +56,12 @@ Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
     (e.g. with the Write tool), then pass that file's path with `--body-file`.
     This avoids dealing with shell special characters.
 
-    1. Use `post-review reply --comment-id ID --body-file PATH` to reply to
+    1. Use `pr-review reply --comment-id ID --body-file PATH` to reply to
        existing inline comments if they need it. This posts immediately.
-    2. Use `post-review queue-comment --path PATH --line N --body-file PATH`
+    2. Use `pr-review queue-comment --path PATH --line N --body-file PATH`
        for every specific code issue you find in new code. This only
        queues the comment; nothing is posted yet.
-    3. Use `post-review submit --body-file PATH` once at the end if you want
+    3. Use `pr-review submit --body-file PATH` once at the end if you want
        to leave top-level feedback. This will submit all queued comments; if
        you don't call it queued comments will be submitted after you finish.
 
@@ -90,9 +90,9 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(gh pr view:*)
     Bash(gh run list:*)
     Bash(gh run view:*)
-    Bash(post-review queue-comment:*)
-    Bash(post-review reply:*)
-    Bash(post-review submit:*)
+    Bash(pr-review queue-comment:*)
+    Bash(pr-review reply:*)
+    Bash(pr-review submit:*)
 
 ### `additional-allowed-tools`
 
@@ -108,11 +108,11 @@ Version of the [gh-pr-render] tool to use. Defaults to the latest version at the
 
 ### Posting review comments
 
-This action bundles its own CLI tool, [`cli/post-review`], that `action.yaml` puts on `PATH` for Claude to run via its Bash tool:
+This action bundles its own CLI tool, [`cli/pr-review`], that `action.yaml` puts on `PATH` for Claude to run via its Bash tool:
 
-- `post-review queue-comment` queues an inline comment on disk. Nothing is posted to GitHub until `submit` is called.
-- `post-review submit` posts everything queued by `queue-comment`, plus an optional top-level body, as a single grouped comment review (it cannot approve or request changes). Claude doesn't have to call this itself — `action.yaml` runs it automatically after Claude's turn ends if anything is still queued.
-- `post-review reply` replies to an existing inline comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
+- `pr-review queue-comment` queues an inline comment on disk. Nothing is posted to GitHub until `submit` is called.
+- `pr-review submit` posts everything queued by `queue-comment`, plus an optional top-level body, as a single grouped comment review (it cannot approve or request changes). Claude doesn't have to call this itself — `action.yaml` runs it automatically after Claude's turn ends if anything is still queued.
+- `pr-review reply` replies to an existing inline comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
 
 [anthropics/claude-code-action]'s built-in inline-comment tool posts each inline comment through GitHub's single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.
 
@@ -128,5 +128,5 @@ If the changes are not identical then this provides Claude with a diff-of-diffs 
 [workflow-review.yaml]: workflow-review.yaml
 [workflow-response.yaml]: workflow-response.yaml
 [anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action
-[`cli/post-review`]: cli/post-review
+[`cli/pr-review`]: cli/pr-review
 [`cli/README.md`]: cli/README.md

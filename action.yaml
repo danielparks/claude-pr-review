@@ -41,12 +41,12 @@ inputs:
       (e.g. with the Write tool), then pass that file's path with `--body-file`.
       This avoids dealing with shell special characters.
 
-      1. Use `post-review reply --comment-id ID --body-file PATH` to reply to
+      1. Use `pr-review reply --comment-id ID --body-file PATH` to reply to
          existing inline comments if they need it. This posts immediately.
-      2. Use `post-review queue-comment --path PATH --line N --body-file PATH`
+      2. Use `pr-review queue-comment --path PATH --line N --body-file PATH`
          for every specific code issue you find in new code. This only
          queues the comment; nothing is posted yet.
-      3. Use `post-review submit --body-file PATH` once at the end if you want
+      3. Use `pr-review submit --body-file PATH` once at the end if you want
          to leave top-level feedback. This will submit all queued comments; if
          you don't call it queued comments will be submitted after you finish.
   additional-prompt-suffix:
@@ -74,9 +74,9 @@ inputs:
       Bash(gh pr view:*)
       Bash(gh run list:*)
       Bash(gh run view:*)
-      Bash(post-review queue-comment:*)
-      Bash(post-review reply:*)
-      Bash(post-review submit:*)
+      Bash(pr-review queue-comment:*)
+      Bash(pr-review reply:*)
+      Bash(pr-review submit:*)
   additional-allowed-tools:
     description: >
       List of additional tools to allow Claude to use, one per line. Added to
@@ -109,15 +109,15 @@ runs:
             | sed 's/,$//' \
           )" >> "$GITHUB_OUTPUT"
 
-    - name: Configure post-review CLI
+    - name: Configure pr-review CLI
       shell: bash
       env:
         CLI_DIR: ${{ github.action_path }}/cli
         PR_NUMBER: ${{ github.event.pull_request.number }}
       run: | # zizmor: ignore[github-env] not user input
-        # Put post-review (see cli/README.md) on PATH for Claude's Bash tool,
-        # and expose PR_NUMBER as an ambient env var. GITHUB_TOKEN is set by
-        # Claude to the special Claude App token.
+        # Put pr-review (see cli/README.md) on PATH for Claude's Bash tool, and
+        # expose PR_NUMBER as an ambient env var. GITHUB_TOKEN is set by Claude
+        # to the special Claude App token.
         set -euo pipefail
         echo "$CLI_DIR" >> "$GITHUB_PATH"
         echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
@@ -266,5 +266,5 @@ runs:
         # The Claude App token, if the calling workflow granted `id-token:
         # write` and the app is installed.
         GITHUB_TOKEN: ${{ steps.claude.outputs.github_token }}
-        CLI_SCRIPT: ${{ github.action_path }}/cli/post-review
+        CLI_SCRIPT: ${{ github.action_path }}/cli/pr-review
       run: node "$CLI_SCRIPT" sweep

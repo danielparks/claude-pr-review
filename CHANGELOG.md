@@ -7,11 +7,11 @@ All notable changes to this project will be documented in this file.
 ### Breaking changes
 
 - Added `prompt-suffix` (with default) and `additional-prompt-suffix` inputs. The `prompt-suffix` default was previously included in both prompts in the example, so configurations will need to be changed on update.
-- Replaced [anthropics/claude-code-action]‘s `mcp__github_inline_comment__create_inline_comment` tool and the `gh` Bash tools for posting comments with a bundled `post-review` CLI tool that Claude runs via its Bash tool. The `allowed-tools` default changed accordingly; configurations that override it will need to be updated.
+- Replaced [anthropics/claude-code-action]‘s `mcp__github_inline_comment__create_inline_comment` tool and the `gh` Bash tools for posting comments with a bundled `pr-review` CLI tool that Claude runs via its Bash tool. The `allowed-tools` default changed accordingly; configurations that override it will need to be updated.
 
 ### Changes
 
-- Added a bundled `post-review` CLI tool so Claude can post inline comments as a single grouped GitHub review instead of one review per comment, and so unsubmitted comments still post automatically after Claude's turn ends even if it never calls `submit` itself.
+- Added a bundled `pr-review` CLI tool so Claude can post inline comments as a single grouped GitHub review instead of one review per comment, and so unsubmitted comments still post automatically after Claude's turn ends even if it never calls `submit` itself.
 - Added `additional-allowed-tools` input.
 - Added input to configure [gh-pr-render] version.
 - Updated [gh-pr-render] to version 0.4.0 to render labels and reactions, and to use blockquotes to ensure that content is distinct from structure.

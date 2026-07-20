@@ -1,4 +1,4 @@
-// True end-to-end smoke tests: spawns the actual post-review.js as a
+// True end-to-end smoke tests: spawns the actual pr-review.js as a
 // subprocess, exactly how Claude's Bash tool invokes it in production.
 // Validation edge cases and the queue/claim mechanics are covered more
 // cheaply as unit tests (queue.test.js, github.test.js) -- this suite only
@@ -20,15 +20,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { startMockGitHub } from "./support/mock-github.js";
 
 const execFileAsync = promisify(execFile);
-const CLI_PATH = fileURLToPath(new URL("../post-review", import.meta.url));
+const CLI_PATH = fileURLToPath(new URL("../pr-review", import.meta.url));
 
-describe("post-review CLI", () => {
+describe("pr-review CLI", () => {
   let mock;
   let queueDir;
   let workDir;
 
   beforeEach(async () => {
-    workDir = await mkdtemp(path.join(tmpdir(), "post-review-test-"));
+    workDir = await mkdtemp(path.join(tmpdir(), "pr-review-test-"));
     queueDir = path.join(workDir, "queue");
   });
 
