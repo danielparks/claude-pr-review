@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+usage() {
+  cat >&2 <<EOF
+Usage: ${0##*/}
+
+Sync multi-line input defaults from action.yaml into README.md.
+
+For each <!-- default:NAME --> ... <!-- /default:NAME --> block in
+README.md, replaces the contents with the current value of
+.inputs.NAME.default from action.yaml, indented as a markdown code block.
+
+Add a marker pair around an input's default in README.md to have it kept
+in sync; inputs without markers are left alone.
+EOF
+}
+
+if [[ ${1:-} == --help ]]; then
+  usage; exit 0
+fi
+
+if ! command -v yq &>/dev/null; then
+  echo "Error: this script requires yq (https://github.com/kislyuk/yq)" >&2
+  exit 1
+fi
+
+readarray -t NAMES < <(yq -r '.inputs | keys[]' action.yaml)
+
+TMP=$(mktemp)
+BLOCK=$(mktemp)
+trap 'rm -f "$TMP" "$BLOCK"' EXIT
+
+cp README.md "$TMP"
+
+for NAME in "${NAMES[@]}"; do
+  START="<!-- default:${NAME} -->"
+  END="<!-- /default:${NAME} -->"
+
+  if ! grep -qF "$START" "$TMP"; then
+    continue # This input isn't marked for syncing.
+  fi
+
+  DEFAULT=$(yq -r ".inputs[\"${NAME}\"].default" action.yaml)
+  if [[ "$DEFAULT" == "null" ]]; then
+    echo "Error: README.md has a default:${NAME} marker, but" \
+      "action.yaml has no default for it" >&2
+    exit 1
+  fi
+
+  # Render as an indented markdown code block, trimming trailing
+  # whitespace and the block scalar's trailing blank line.
+  sed -e 's/^/    /' -e 's/[[:space:]]*$//' <<<"$DEFAULT" \
+    | sed -e '${/^$/d;}' > "$BLOCK"
+
+  awk -v start="$START" -v end="$END" -v blockfile="$BLOCK" '
+    $0 == start {
+      print
+      while ((getline line < blockfile) > 0) print line
+      close(blockfile)
+      skip = 1
+      next
+    }
+    $0 == end { skip = 0 }
+    skip { next }
+    { print }
+  ' "$TMP" > "$TMP.new"
+  mv "$TMP.new" "$TMP"
+done
+
+if ! diff -q README.md "$TMP" &>/dev/null; then
+  cp "$TMP" README.md
+  echo "Updated README.md"
+fi

@@ -46,6 +46,13 @@ repos:
         pass_filenames: false
         files: workflow.*\.yaml$|^scripts/generate-workflows$
         stages: [pre-commit, pre-merge-commit]
+      - id: sync-readme
+        name: sync-readme
+        language: system
+        entry: scripts/sync-readme
+        pass_filenames: false
+        files: ^action\.yaml$|^README\.md$|^scripts/sync-readme$
+        stages: [pre-commit, pre-merge-commit]
       - id: zizmor
         name: zizmor
         language: system
