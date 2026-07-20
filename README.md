@@ -46,6 +46,10 @@ Prompt for when a prior Claude review exists. Defaults to:
     prior review) and a diff of what changed since your last review are
     included below.
 
+    Respond to discussion as appropriate, and review new changes. If nothing
+    has changed there is no need to note it unless the user seems to think
+    that changes were made.
+
 ### `prompt-suffix`
 
 Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
@@ -57,13 +61,24 @@ Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
     This avoids dealing with shell special characters.
 
     1. Use `pr-review reply --comment-id ID --body-file PATH` to reply to
-       existing inline comments if they need it. This posts immediately.
+       existing inline comments if they have been resolved, if changes have
+       been made that haven’t resolved them, or if you have new information.
+       This posts immediately.
     2. Use `pr-review queue-comment --path PATH --line N --body-file PATH`
        for every specific code issue you find in new code. This only
        queues the comment; nothing is posted yet.
     3. Use `pr-review submit --body-file PATH` once at the end if you want
        to leave top-level feedback. This will submit all queued comments; if
        you don't call it queued comments will be submitted after you finish.
+       Do not repeat comments made inline, though you can note unresolved
+       issues briefly.
+
+    If it's useful you may link to specific comments, but don’t refer to them
+    by ID — the user does not have easy access to that.
+
+    - `#discussion_rID` — an inline comment.
+    - `#pullrequestreview-ID` — a top-level review comment.
+    - `#issuecomment-ID` — a top-level non-review comment.
 
 ### `additional-prompt-suffix`
 
