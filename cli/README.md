@@ -1,16 +1,16 @@
 # post-review CLI
 
-`post-review` is what `action.yaml` gives Claude, via its Bash tool, to post PR review comments as `claude[bot]` — see the "Posting review comments" section of the [root README](../README.md#posting-review-comments) for what the subcommands do and why this exists instead of an MCP server.
+`post-review` is what `action.yaml` gives Claude, via its Bash tool, to post PR review comments as `claude[bot]` — see the "Posting review comments" section of the [root README](../README.md#posting-review-comments) for what the subcommands do.
 
 ## Why Bash instead of MCP
 
 The Claude App token (what makes comments post as `claude[bot]` instead of `github-actions[bot]`) only exists inside `anthropics/claude-code-action`'s own process, and only reaches a subprocess that inherits its real environment. A Bash-tool subprocess does; an MCP server does not — the MCP SDK's `StdioClientTransport` spawns servers with a fixed safe env allowlist (`HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`, `USER`) plus whatever's explicitly in `--mcp-config`, which `action.yaml` has to build _before_ `claude-code-action` even starts — before that token exists. So an MCP server bundled here could never get it, no matter how it's configured. `post-review` sidesteps that by being an ordinary command Claude runs via Bash, which inherits the real environment normally.
 
-This isn't reaching around anything Anthropic didn't already intend: it's the same default trust model their own action already applies to Bash-tool subprocesses for any actor with write access (no env scrubbing unless `allowed_non_write_users` is set) — confirmed empirically on an older version of this action, where `gh pr comment`/`gh api` from Bash already posted as `claude[bot]` (see `danielparks/gh-pr-render#32`).
+This isn't reaching around anything Anthropic didn't already intend: it's the same default trust model their own action already applies to Bash-tool subprocesses for any actor with write access (no env scrubbing unless `allowed_non_write_users` is set) — confirmed empirically on an older version of this action, where `gh pr comment`/`gh api` from Bash already posted as `claude[bot]` (see danielparks/gh-pr-render#32).
 
 ## Why no build step
 
-Unlike the old MCP server, this has zero runtime dependencies — it's plain JS using the built-in `fetch`, so `action.yaml` runs `cli/post-review` directly with no bundling and no install step at consumption time. `npm ci`/`eslint`/`vitest` are dev-only, for local development and `scripts/cli-check` (wired into pre-commit).
+This has zero runtime dependencies — it's plain JavaScript using the built-in `fetch`, so `action.yaml` runs `cli/post-review` directly with no bundling and no install step at consumption time. `npm ci`/`eslint`/`vitest` are dev-only, for local development and `scripts/cli-check` (wired into pre-commit).
 
 ## Why a queue directory instead of an in-memory batch
 

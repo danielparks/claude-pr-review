@@ -9,6 +9,7 @@ import { parseArgs } from "node:util";
 import { readFile } from "node:fs/promises";
 import {
   claim,
+  cleanup,
   listClaimed,
   markPosted,
   queueComment,
@@ -217,7 +218,13 @@ async function cmdSweep() {
       `Swept ${handled} pending submission(s), ${failed} failure(s).`,
     );
   }
-  if (failed > 0) process.exitCode = 1;
+
+  if (failed > 0) {
+    process.exitCode = 1;
+  } else {
+    // Only delete queue on success.
+    await cleanup(root);
+  }
 }
 
 async function trySubmit(claimedDir) {

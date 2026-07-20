@@ -1,4 +1,0 @@
-[files]
-extend-exclude = [
-  "mcp-server/dist",
-]

@@ -4,7 +4,14 @@
 // cheaply as unit tests (queue.test.js, github.test.js) -- this suite only
 // needs to prove the real CLI wiring works end to end.
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -107,6 +114,56 @@ describe("post-review CLI", () => {
     expect(entries.some((e) => e.startsWith("comments.posted-"))).toBe(true);
   });
 
+  it("reusing file for second queue-comment works", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "GET",
+        pattern: /\/pulls\/5$/,
+        body: { head: { sha: "deadbeef" } },
+      },
+      {
+        method: "POST",
+        pattern: /\/pulls\/5\/reviews$/,
+        body: { id: 111, html_url: "https://example/review/111" },
+      },
+    ]);
+
+    const commentBody = await bodyFile("ONE");
+    await run([
+      "queue-comment",
+      "--path",
+      "foo.js",
+      "--line",
+      "10",
+      "--body-file",
+      commentBody,
+    ]);
+
+    await writeFile(commentBody, "TWO");
+    await run([
+      "queue-comment",
+      "--path",
+      "bar.js",
+      "--line",
+      "20",
+      "--body-file",
+      commentBody,
+    ]);
+
+    const { stdout } = await run(["submit"]);
+    expect(stdout).toMatch(/Submitted review with 2 inline comment/);
+
+    const reviewRequests = mock.requests.filter((r) =>
+      r.url.endsWith("/reviews"),
+    );
+    expect(reviewRequests).toHaveLength(1);
+    expect(reviewRequests[0].body.comments).toMatchObject([
+      { body: "ONE" },
+      { body: "TWO" },
+    ]);
+    expect(reviewRequests[0].body.body).toBe("");
+  });
+
   it("submit with nothing queued and no body fails without calling the API", async () => {
     mock = await startMockGitHub([]);
     await expect(run(["submit"])).rejects.toThrow(/Nothing to submit/);
@@ -136,7 +193,7 @@ describe("post-review CLI", () => {
     expect(reviewRequest.body.body).toBe("Nothing to flag inline.");
   });
 
-  it("queue-comment rejects startLine >= line without crashing", async () => {
+  it("queue-comment rejects startLine >= line", async () => {
     mock = await startMockGitHub([]);
     const body = await bodyFile("issue");
     await expect(
@@ -272,6 +329,7 @@ describe("post-review CLI", () => {
     expect(
       mock.requests.filter((r) => r.url.endsWith("/reviews")),
     ).toHaveLength(1);
+    await expect(access(queueDir)).rejects.toThrow("ENOENT");
   });
 
   it("sweep is a no-op when there's nothing queued", async () => {

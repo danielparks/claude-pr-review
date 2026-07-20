@@ -52,21 +52,18 @@ Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
 
     Only post GitHub comments — don't submit review text as messages.
 
-    For each comment or reply body: write it to a file under /tmp first
-    (e.g. with the Write tool), then pass that file's path with
-    `--body-file` — don't pass comment text directly as a shell argument.
+    For the commands below: write the comment body to a file under /tmp first
+    (e.g. with the Write tool), then pass that file's path with `--body-file`.
+    This avoids dealing with shell special characters.
 
     1. Use `post-review reply --comment-id ID --body-file PATH` to reply to
        existing inline comments if they need it. This posts immediately.
     2. Use `post-review queue-comment --path PATH --line N --body-file PATH`
        for every specific code issue you find in new code. This only
        queues the comment; nothing is posted yet.
-    3. If you have comments queued, or want to leave top-level feedback,
-       call `post-review submit --body-file PATH` once at the end. Omit
-       `--body-file` if you have nothing to say beyond the inline comments.
-       You don't have to call this if you only queued comments and have no
-       top-level feedback — anything queued is still posted as one grouped
-       review even if you never call submit yourself.
+    3. Use `post-review submit --body-file PATH` once at the end if you want
+       to leave top-level feedback. This will submit all queued comments; if
+       you don't call it queued comments will be submitted after you finish.
 
 ### `additional-prompt-suffix`
 
@@ -119,7 +116,7 @@ This action bundles its own CLI tool, [`cli/post-review`], that `action.yaml` pu
 
 [anthropics/claude-code-action]'s built-in inline-comment tool posts each inline comment through GitHub's single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.
 
-This is a Bash-invoked CLI tool rather than an MCP server so that it can post as `claude[bot]` instead of `github-actions[bot]`: the Claude App token only reaches subprocesses that inherit [anthropics/claude-code-action]'s real environment, which a Bash-tool call does and an MCP server does not. It's plain, dependency-free JavaScript that `action.yaml` runs directly with no build step — see [`cli/README.md`] for the full reasoning and how the on-disk comment queue avoids needing any locking.
+This is a Bash-invoked CLI tool rather than an MCP server so that it can post as `claude[bot]` instead of `github-actions[bot]`: the Claude App token only reaches subprocesses that inherit [anthropics/claude-code-action]'s real environment, which a Bash-tool call does and an MCP server does not. It's plain, dependency-free JavaScript that `action.yaml` runs directly with no build step — see [`cli/README.md`] for more information.
 
 ### PR updates
 

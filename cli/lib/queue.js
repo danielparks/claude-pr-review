@@ -51,8 +51,7 @@ async function writeAtomic(filePath, content) {
 export async function queueComment(root, comment) {
   const dir = commentsDir(root);
   await mkdir(dir, { recursive: true });
-  const name = `${Date.now()}-${randomUUID()}.json`;
-  const final = path.join(dir, name);
+  const final = path.join(dir, `${Date.now()}-${randomUUID()}.json`);
   await writeAtomic(final, JSON.stringify(comment));
   return final;
 }
@@ -103,7 +102,11 @@ export async function readBatch(claimedDir) {
 
 /** Mark a claimed batch as successfully posted. Returns the new path. */
 export async function markPosted(claimedDir) {
-  const posted = claimedDir.replace(/comments\.claimed-/, "comments.posted-");
+  const { dir, base } = path.parse(claimedDir);
+  const posted = path.join(
+    dir,
+    base.replace(/^comments\.claimed-/, "comments.posted-"),
+  );
   await rename(claimedDir, posted);
   return posted;
 }

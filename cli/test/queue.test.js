@@ -27,8 +27,8 @@ describe("queue", () => {
   });
 
   it("queueComment() writes each comment to its own uniquely named file", async () => {
-    const a = await queueComment(root, comment("a.js"));
-    const b = await queueComment(root, comment("b.js"));
+    const a = await queueComment(root, comment("a.txt"));
+    const b = await queueComment(root, comment("b.txt"));
     expect(a).not.toEqual(b);
 
     const files = await readdir(path.join(root, "comments"));
@@ -44,8 +44,7 @@ describe("queue", () => {
     );
     expect(new Set(paths).size).toBe(50);
 
-    const files = await readdir(path.join(root, "comments"));
-    expect(files).toHaveLength(50);
+    expect(await readdir(path.join(root, "comments"))).toHaveLength(50);
   });
 
   it("claim() returns null when nothing was ever queued", async () => {
@@ -53,7 +52,7 @@ describe("queue", () => {
   });
 
   it("claim() atomically renames comments/ and only one caller can win it", async () => {
-    await queueComment(root, comment("a.js"));
+    await queueComment(root, comment("a.txt"));
 
     const [first, second] = await Promise.all([claim(root), claim(root)]);
     const winners = [first, second].filter((c) => c !== null);
@@ -61,8 +60,8 @@ describe("queue", () => {
   });
 
   it("claim() -> readBatch() round-trips comments and body", async () => {
-    await queueComment(root, comment("a.js"));
-    await queueComment(root, comment("b.js"));
+    await queueComment(root, comment("a.txt"));
+    await queueComment(root, comment("b.txt"));
     await setBody(root, "top-level notes");
 
     const claimed = await claim(root);
@@ -72,21 +71,21 @@ describe("queue", () => {
   });
 
   it("queueComment() after a claim() starts a fresh batch", async () => {
-    await queueComment(root, comment("a.js"));
+    await queueComment(root, comment("a.txt"));
     const firstClaim = await claim(root);
     expect(await claim(root)).toBeNull(); // nothing new queued yet
 
-    await queueComment(root, comment("b.js"));
+    await queueComment(root, comment("b.txt"));
     const secondClaim = await claim(root);
     expect(secondClaim).not.toBeNull();
     expect(secondClaim).not.toEqual(firstClaim);
 
     const { comments } = await readBatch(secondClaim);
-    expect(comments).toEqual([comment("b.js")]);
+    expect(comments).toEqual([comment("b.txt")]);
   });
 
   it("markPosted() renames .claimed- to .posted-, and listClaimed() ignores it", async () => {
-    await queueComment(root, comment("a.js"));
+    await queueComment(root, comment("a.txt"));
     const claimed = await claim(root);
 
     expect(await listClaimed(root)).toEqual([claimed]);
@@ -97,13 +96,13 @@ describe("queue", () => {
   });
 
   it("listClaimed() surfaces an abandoned claim for retry", async () => {
-    await queueComment(root, comment("a.js"));
+    await queueComment(root, comment("a.txt"));
     const claimed = await claim(root);
     // Simulate a crash: never call markPosted().
 
     expect(await listClaimed(root)).toEqual([claimed]);
     const { comments } = await readBatch(claimed);
-    expect(comments).toEqual([comment("a.js")]);
+    expect(comments).toEqual([comment("a.txt")]);
   });
 
   it("listClaimed() returns an empty list when the queue dir doesn't exist yet", async () => {

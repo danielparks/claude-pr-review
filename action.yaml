@@ -37,21 +37,18 @@ inputs:
     default: |
       Only post GitHub comments — don't submit review text as messages.
 
-      For each comment or reply body: write it to a file under /tmp first
-      (e.g. with the Write tool), then pass that file's path with
-      `--body-file` — don't pass comment text directly as a shell argument.
+      For the commands below: write the comment body to a file under /tmp first
+      (e.g. with the Write tool), then pass that file's path with `--body-file`.
+      This avoids dealing with shell special characters.
 
       1. Use `post-review reply --comment-id ID --body-file PATH` to reply to
          existing inline comments if they need it. This posts immediately.
       2. Use `post-review queue-comment --path PATH --line N --body-file PATH`
          for every specific code issue you find in new code. This only
          queues the comment; nothing is posted yet.
-      3. If you have comments queued, or want to leave top-level feedback,
-         call `post-review submit --body-file PATH` once at the end. Omit
-         `--body-file` if you have nothing to say beyond the inline comments.
-         You don't have to call this if you only queued comments and have no
-         top-level feedback — anything queued is still posted as one grouped
-         review even if you never call submit yourself.
+      3. Use `post-review submit --body-file PATH` once at the end if you want
+         to leave top-level feedback. This will submit all queued comments; if
+         you don't call it queued comments will be submitted after you finish.
   additional-prompt-suffix:
     description: >
       Appended after `prompt-suffix`.
@@ -117,15 +114,10 @@ runs:
       env:
         CLI_DIR: ${{ github.action_path }}/cli
         PR_NUMBER: ${{ github.event.pull_request.number }}
-      run: |
+      run: | # zizmor: ignore[github-env] not user input
         # Put post-review (see cli/README.md) on PATH for Claude's Bash tool,
-        # and expose PR_NUMBER as an ambient env var -- both $GITHUB_PATH and
-        # $GITHUB_ENV apply to every later step in this job, including the
-        # Claude Code Action step below and whatever it spawns. GITHUB_TOKEN
-        # is *not* set here: post-review relies on inheriting the real token
-        # (the Claude App token, if available) from whatever env Claude's own
-        # Bash-tool subprocess already runs with -- see cli/README.md for why
-        # that's different from (and more than) what an MCP server gets.
+        # and expose PR_NUMBER as an ambient env var. GITHUB_TOKEN is set by
+        # Claude to the special Claude App token.
         set -euo pipefail
         echo "$CLI_DIR" >> "$GITHUB_PATH"
         echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
@@ -267,15 +259,12 @@ runs:
 
     - name: Submit any review comments Claude queued but didn't post
       # Runs even if the step above failed or Claude never called `submit`
-      # itself -- see cli/README.md for why this is safe to always attempt
-      # (it's a no-op when nothing was ever queued).
+      # itself (it's a no-op when nothing was ever queued).
       if: always() && steps.diff.outputs.skip != 'true'
       shell: bash
       env:
         # The Claude App token, if the calling workflow granted `id-token:
-        # write` and the app is installed -- the same token post-review
-        # relies on inheriting during the run above, exposed here as this
-        # step's own credential now that Claude's session has ended.
+        # write` and the app is installed.
         GITHUB_TOKEN: ${{ steps.claude.outputs.github_token }}
         CLI_SCRIPT: ${{ github.action_path }}/cli/post-review
       run: node "$CLI_SCRIPT" sweep
