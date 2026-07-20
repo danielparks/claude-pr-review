@@ -280,6 +280,6 @@ runs:
       env:
         # The Claude App token, if the calling workflow granted `id-token:
         # write` and the app is installed.
-        GITHUB_TOKEN: ${{ steps.claude.outputs.github_token }}
+        GITHUB_TOKEN: ${{ steps.claude.outputs.github_token || github.token }}
         CLI_SCRIPT: ${{ github.action_path }}/cli/pr-review
       run: node "$CLI_SCRIPT" sweep
