@@ -97,9 +97,9 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Test request changes GITHUB_TOKEN
+    - name: Test accept GITHUB_TOKEN
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        gh pr review -r -b 'Test review: request changes' ${{ github.event.pull_request.number }}
+        gh pr review -a -b 'Test review: accept' ${{ github.event.pull_request.number }}
