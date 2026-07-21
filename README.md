@@ -36,8 +36,10 @@ Claude Code OAuth token for use with a subscription account. Generate with `clau
 Prompt for when no prior Claude review exists. Defaults to:
 
 <!-- default:initial-review-prompt -->
+
     Please review this pull request. The PR branch is already checked out in
     the current working directory, and the PR discussion is included below.
+
 <!-- /default:initial-review-prompt -->
 
 ### `re-review-prompt`
@@ -45,6 +47,7 @@ Prompt for when no prior Claude review exists. Defaults to:
 Prompt for when a prior Claude review exists. Defaults to:
 
 <!-- default:re-review-prompt -->
+
     This pull request has been updated. The PR discussion (including your
     prior review) and a diff of what changed since your last review are
     included below.
@@ -52,6 +55,7 @@ Prompt for when a prior Claude review exists. Defaults to:
     Respond to discussion as appropriate, and review new changes. If nothing
     has changed there is no need to note it unless the user seems to think
     that changes were made.
+
 <!-- /default:re-review-prompt -->
 
 ### `prompt-suffix`
@@ -59,6 +63,7 @@ Prompt for when a prior Claude review exists. Defaults to:
 Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
 
 <!-- default:prompt-suffix -->
+
     Only post GitHub comments — don't submit review text as messages.
 
     For the commands below: write the comment body to a file under /tmp first
@@ -84,6 +89,7 @@ Added to the end of `initial-review-prompt` and `re-review-prompt`. Defaults to:
     - `#discussion_rID` — an inline comment.
     - `#pullrequestreview-ID` — a top-level review comment.
     - `#issuecomment-ID` — a top-level non-review comment.
+
 <!-- /default:prompt-suffix -->
 
 ### `additional-prompt-suffix`
@@ -101,6 +107,7 @@ GitHub username of the bot; used to detect prior reviews. Defaults to “claude�
 List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. Defaults to:
 
 <!-- default:allowed-tools -->
+
     Read
     Write(/tmp/**)
     Bash(find:*)
@@ -115,6 +122,7 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(pr-review queue-comment:*)
     Bash(pr-review reply:*)
     Bash(pr-review submit:*)
+
 <!-- /default:allowed-tools -->
 
 ### `additional-allowed-tools`

@@ -31,7 +31,7 @@ readarray -t NAMES < <(yq -r '.inputs | keys[]' action.yaml)
 
 TMP=$(mktemp)
 BLOCK=$(mktemp)
-trap 'rm -f "$TMP" "$BLOCK"' EXIT
+trap 'rm -f "$TMP" "$TMP.new" "$BLOCK"' EXIT
 
 cp README.md "$TMP"
 
@@ -43,6 +43,11 @@ for NAME in "${NAMES[@]}"; do
     continue # This input isn't marked for syncing.
   fi
 
+  if ! grep -qF "$END" "$TMP"; then
+    echo "Error: README.md has a ${START} marker but no ${END} marker" >&2
+    exit 1
+  fi
+
   DEFAULT=$(yq -r ".inputs[\"${NAME}\"].default" action.yaml)
   if [[ "$DEFAULT" == "null" ]]; then
     echo "Error: README.md has a default:${NAME} marker, but" \
@@ -50,20 +55,19 @@ for NAME in "${NAMES[@]}"; do
     exit 1
   fi
 
-  # Render as an indented markdown code block, trimming trailing
-  # whitespace and the block scalar's trailing blank line.
-  sed -e 's/^/    /' -e 's/[[:space:]]*$//' <<<"$DEFAULT" \
-    | sed -e '${/^$/d;}' > "$BLOCK"
+  # Indent all lines with content.
+  sed -e 's/^./    &/' <<<"$DEFAULT" >"$BLOCK"
 
   awk -v start="$START" -v end="$END" -v blockfile="$BLOCK" '
     $0 == start {
       print
+      print ""
       while ((getline line < blockfile) > 0) print line
       close(blockfile)
       skip = 1
       next
     }
-    $0 == end { skip = 0 }
+    $0 == end { skip = 0; print "" }
     skip { next }
     { print }
   ' "$TMP" > "$TMP.new"
@@ -71,6 +75,6 @@ for NAME in "${NAMES[@]}"; do
 done
 
 if ! diff -q README.md "$TMP" &>/dev/null; then
-  cp "$TMP" README.md
+  mv "$TMP" README.md
   echo "Updated README.md"
 fi
