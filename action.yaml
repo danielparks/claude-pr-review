@@ -97,6 +97,13 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Test request changes GITHUB_TOKEN
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh pr review -r -b 'Test review: request changes'
+
     - name: Build allowed-tools list
       id: tools
       shell: bash
