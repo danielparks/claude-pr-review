@@ -14,15 +14,45 @@ This has zero runtime dependencies — it's plain JavaScript using the built-in 
 
 ## Why a queue directory instead of an in-memory batch
 
-Comments are queued as one file per comment (`$RUNNER_TEMP/pr-review-queue/comments/<timestamp>-<uuid>.json`) rather than held in memory, because `pr-review` is a fresh process on every invocation — there's no long-lived server to hold state. Each `queue-comment` call only ever creates a new, uniquely-named file, so concurrent invocations can never collide; there's nothing to lock.
+Comments are queued as one file per comment (`$RUNNER_TEMP/pr-review-queue/comments/<timestamp>-<uuid>.json`) rather than held in memory, because `pr-review` is a fresh process on every invocation — there's no long-lived server to hold state. Each `queue-inline-comment` call only ever creates a new, uniquely-named file, so concurrent invocations can never collide; there's nothing to lock.
 
-`submit` claims the batch with a single atomic rename (`comments/` → `comments.claimed-<ts>-<pid>-<uuid>/`), posts it as one grouped review, and renames it again to `comments.posted-<ts>-<pid>-<uuid>/` only after a confirmed-successful response. All three states are encoded in the directory name, so a completely separate process — the deferred `sweep` step `action.yaml` runs after Claude's turn ends — can always tell what happened without reading any file content:
+`comment-review`, `approve-review`, and `request-changes-review` all finalize the batch the same way: they record which event was decided (`_event.txt`, via `setEvent`) alongside the body, then claim it with a single atomic rename (`comments/` → `comments.claimed-<ts>-<pid>-<uuid>/`), post it as one grouped review, and rename it again to `comments.posted-<ts>-<pid>-<uuid>/` only after a confirmed-successful response. All three states are encoded in the directory name, so a completely separate process — the deferred `sweep` step `action.yaml` runs after Claude's turn ends — can always tell what happened without reading any file content:
 
-- `comments/` still exists → Claude queued things but never called `submit`; sweep claims and posts it. This is what lets Claude skip calling `submit` at all when it has nothing to add beyond the inline comments.
-- `comments.claimed-*/` exists → a `submit` call claimed a batch and then crashed before confirming success; sweep retries it.
+- `comments/` still exists → Claude queued things but never finalized; sweep claims and posts it as whatever event (if any) was recorded, defaulting to `COMMENT` if `setEvent` was never called. This is what lets Claude skip calling `comment-review` at all when it has nothing to add beyond the inline comments.
+- `comments.claimed-*/` exists → a finalizing call claimed a batch and then crashed before confirming success; sweep retries it, with the same event it was originally going to submit — recording the event before claiming is exactly what makes this safe: `sweep` never has to guess, so it can never silently turn a would-be `REQUEST_CHANGES` into an inert `COMMENT` (or vice versa) on retry.
 - `comments.posted-*/` → already posted; sweep ignores it.
 
 The one gap this doesn't close: if the crash happens during the network request itself (no response either way), a retry can't distinguish "GitHub never got it" from "GitHub got it but we never heard back," so a duplicate review is possible in that narrow window. That's inherent to the reviews API not offering an idempotency key, not something the queue design can fix.
+
+`action.yaml` runs `pr-review init` before Claude's own turn starts, which exclusively creates the queue root (fails if it already exists) so nothing that ran earlier in the same job could have pre-seeded a review decision in it. That's not a complete defense — something already running in the job (e.g. a long-lived process watching for the directory to appear) could still modify it after this point — but it closes off the cheapest version of that: dropping a file in ahead of time.
+
+An `APPROVE` gets special handling nowhere else applies: `sweep --downgrade-approval` (which `action.yaml` passes when the Claude step didn't succeed, or when only the lower-privilege `github.token` fallback is available) proactively rewrites a queued `APPROVE` into a `COMMENT` before ever calling the API, with a note appended to the body explaining why. Separately, and unconditionally, any live `APPROVE` attempt GitHub itself rejects because the token isn't permitted to approve is automatically retried as a `COMMENT`, again with a note. `REQUEST_CHANGES` never gets downgraded by either mechanism — see the danger note below for why.
+
+## Opt-in tools
+
+A few `pr-review` subcommands are deliberately left out of the default `allowed-tools` list in `action.yaml`. They're real capabilities some workflows want, but they change what kind of thing Claude _is_ in a PR — from "leaves comments" to "affects merge state" — so they're opt-in only, enabled by adding the relevant line(s) below to the `additional-allowed-tools` input, and should be paired with your own `additional-prompt` text describing when Claude should use them.
+
+### `resolve-thread --thread-id ID`
+
+Resolves an inline-comment thread via GitHub's `resolveReviewThread` GraphQL mutation, given the thread's GraphQL node id (not a REST comment id — [gh-pr-render](https://github.com/danielparks/gh-pr-render) surfaces this alongside its rendered comments).
+
+**Danger:** resolving is a judgment call. If Claude resolves a thread because someone replied to it, rather than because the underlying issue was actually fixed, it removes the visual signal a human reviewer relies on to know what's still open.
+
+### `hide-review --review-id ID`
+
+Minimizes a top-level review (classified `OUTDATED`) via GitHub's `minimizeComment` GraphQL mutation, given the review's REST id. Intended for superseding Claude's own stale reviews on re-review, not anyone else's.
+
+**Danger:** minimizing isn't easily reversible outside the GraphQL API, and it removes the review from the normal PR timeline for anyone reading it later.
+
+### `approve-review [--body-file PATH]` / `request-changes-review --body-file PATH`
+
+Submit a review with an `APPROVE` or `REQUEST_CHANGES` event instead of `COMMENT`, i.e. actually approve or block the PR rather than just comment on it. Like `comment-review`, these post whatever was queued with `queue-inline-comment` alongside the top-level body.
+
+**Danger:** this is the most consequential tool here. An approval or block from an LLM is a fundamentally different signal than the same from a human reviewer, and treating it as equivalent — e.g. for satisfying a required-approval branch protection rule — is a governance decision your organization should make deliberately, not one this action should make for you by default.
+
+It's also **not** covered by GitHub's "Allow GitHub Actions to create and approve pull requests" repository/organization setting, even when that setting is off. That setting only inspects whether a review was submitted with the workflow run's own ephemeral `GITHUB_TOKEN` — it exists to stop a workflow from trivially rubber-stamping itself with its own ambient credential. Claude authenticates with its own GitHub App installation token, a completely different credential that setting was never scoped to check, so it approves or requests changes regardless of that setting's value. If you're relying on that setting to prevent bots from approving PRs, enabling `approve-review` here bypasses it entirely.
+
+`APPROVE` specifically has multiple layers of automatic downgrade-to-`COMMENT` built in — see "Why a queue directory" above — because an unearned approval is unsafe (it can vouch for a review that never finished), whereas an unearned block is just recoverable friction. `REQUEST_CHANGES` is deliberately never downgraded for that reason: by default, GitHub blocks the merge button for any pending "Request changes" review from a write-access account, and softening that into a mere comment on a failed or lower-trust run would be trading a fail-safe default for a fail-open one.
 
 ## Development
 

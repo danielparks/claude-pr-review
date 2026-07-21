@@ -39,18 +39,18 @@ inputs:
       (e.g. with the Write tool), then pass that file's path with `--body-file`.
       This avoids dealing with shell special characters.
 
-      1. Use `pr-review reply --comment-id ID --body-file PATH` to reply to
-         existing inline comments if they have been resolved, if changes have
-         been made that haven’t resolved them, or if you have new information.
-         This posts immediately.
-      2. Use `pr-review queue-comment --path PATH --line N --body-file PATH`
-         for every specific code issue you find in new code. This only
+      1. Use `pr-review reply-inline-comment --comment-id ID --body-file PATH`
+         to reply to existing inline comments if they have been resolved, if
+         changes have been made that haven’t resolved them, or if you have new
+         information. This posts immediately.
+      2. Use `pr-review queue-inline-comment --path PATH --line N --body-file
+         PATH` for every specific code issue you find in new code. This only
          queues the comment; nothing is posted yet.
-      3. Use `pr-review submit --body-file PATH` once at the end if you want
-         to leave top-level feedback. This will submit all queued comments; if
-         you don't call it queued comments will be submitted after you finish.
-         Do not repeat comments made inline, though you may briefly list issues
-         that remain unresolved from a previous review.
+      3. Use `pr-review comment-review --body-file PATH` once at the end if
+         you want to leave top-level feedback. This will submit all queued
+         comments; if you don't call it queued comments will be submitted
+         after you finish. Do not repeat comments made inline, though you may
+         briefly list issues that remain unresolved from a previous review.
 
       If it's useful you may link to specific comments, but don’t refer to them
       by ID — the user does not have easy access to that.
@@ -80,15 +80,18 @@ inputs:
       Bash(gh pr view:*)
       Bash(gh run list:*)
       Bash(gh run view:*)
-      Bash(pr-review queue-comment:*)
-      Bash(pr-review reply:*)
-      Bash(pr-review submit:*)
+      Bash(pr-review queue-inline-comment:*)
+      Bash(pr-review reply-inline-comment:*)
+      Bash(pr-review comment-review:*)
   additional-allowed-tools:
     description: >
       List of additional tools to allow Claude to use, one per line. Added to
       `allowed-tools` and then passed to `--allowedTools`.
 
       This is useful if you just want to add a tool to the default tool list.
+      In particular, see the "Opt-in tools" section of `cli/README.md` for
+      `pr-review` subcommands that are deliberately left out of the default
+      list.
     default:
   gh-pr-render-version:
     description: Version of the `gh-pr-render` tool to use.
@@ -127,6 +130,7 @@ runs:
         set -euo pipefail
         echo "$CLI_DIR" >> "$GITHUB_PATH"
         echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+        node "$CLI_DIR/pr-review" init
 
     - name: diff cache
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -238,8 +242,8 @@ runs:
         claude_args: --allowedTools "${{ steps.tools.outputs.list }}"
 
     - name: Submit any review comments Claude queued but didn't post
-      # Runs even if the step above failed or Claude never called `submit`
-      # itself (it's a no-op when nothing was ever queued).
+      # Runs even if the step above failed or Claude never called
+      # `comment-review` itself (it's a no-op when nothing was ever queued).
       if: always() && steps.diff.outputs.skip != 'true'
       shell: bash
       env:
@@ -247,4 +251,16 @@ runs:
         # write` and the app is installed.
         GITHUB_TOKEN: ${{ steps.claude.outputs.github_token || github.token }}
         CLI_SCRIPT: ${{ github.action_path }}/cli/pr-review
-      run: node "$CLI_SCRIPT" sweep
+        # Never let a queued APPROVE go out unattended when either the run
+        # itself didn't succeed, or we only have the lower-privilege
+        # fallback token instead of the Claude App token -- neither
+        # circumstance should get to submit an approval sweep never
+        # actually watched happen live.
+        DOWNGRADE_APPROVAL: ${{ (steps.claude.outputs.github_token == '' || steps.claude.outcome != 'success') && 'true' || '' }}
+      run: |
+        set -euo pipefail
+        FLAGS=()
+        if [[ -n "$DOWNGRADE_APPROVAL" ]]; then
+          FLAGS+=(--downgrade-approval)
+        fi
+        node "$CLI_SCRIPT" sweep "${FLAGS[@]}"

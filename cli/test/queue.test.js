@@ -4,11 +4,13 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   claim,
+  initQueue,
   listClaimed,
   markPosted,
   queueComment,
   readBatch,
   setBody,
+  setEvent,
 } from "../lib/queue.js";
 
 function comment(path_) {
@@ -47,6 +49,17 @@ describe("queue", () => {
     expect(await readdir(path.join(root, "comments"))).toHaveLength(50);
   });
 
+  it("initQueue() creates the root directory", async () => {
+    const fresh = path.join(root, "fresh");
+    await initQueue(fresh);
+    expect(await readdir(fresh)).toEqual([]);
+  });
+
+  it("initQueue() fails with EEXIST when the directory already exists", async () => {
+    // `root` itself already exists (mkdtemp created it in beforeEach).
+    await expect(initQueue(root)).rejects.toMatchObject({ code: "EEXIST" });
+  });
+
   it("claim() returns null when nothing was ever queued", async () => {
     expect(await claim(root)).toBeNull();
   });
@@ -68,6 +81,31 @@ describe("queue", () => {
     const { comments, body } = await readBatch(claimed);
     expect(comments).toHaveLength(2);
     expect(body).toBe("top-level notes");
+  });
+
+  it("readBatch() defaults event to COMMENT when setEvent() was never called", async () => {
+    await queueComment(root, comment("a.txt"));
+    const claimed = await claim(root);
+    expect((await readBatch(claimed)).event).toBe("COMMENT");
+  });
+
+  it("claim() -> readBatch() round-trips the event set by setEvent()", async () => {
+    await queueComment(root, comment("a.txt"));
+    await setEvent(root, "APPROVE");
+
+    const claimed = await claim(root);
+    expect((await readBatch(claimed)).event).toBe("APPROVE");
+  });
+
+  it("setEvent() alone creates the batch, so claim() doesn't return null", async () => {
+    await setEvent(root, "APPROVE");
+    const claimed = await claim(root);
+    expect(claimed).not.toBeNull();
+
+    const { comments, body, event } = await readBatch(claimed);
+    expect(comments).toEqual([]);
+    expect(body).toBe("");
+    expect(event).toBe("APPROVE");
   });
 
   it("queueComment() after a claim() starts a fresh batch", async () => {

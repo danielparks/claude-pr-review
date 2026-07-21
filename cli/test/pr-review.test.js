@@ -62,7 +62,20 @@ describe("pr-review CLI", () => {
     return execFileAsync("node", [CLI_PATH, ...args], { env: env(extraEnv) });
   }
 
-  it("queue-comment + queue-comment + submit posts one grouped review", async () => {
+  it("init creates the queue directory", async () => {
+    mock = await startMockGitHub([]);
+    const { stdout } = await run(["init"]);
+    expect(stdout).toMatch(/Created queue directory/);
+    expect(await readdir(queueDir)).toEqual([]);
+  });
+
+  it("init fails if the queue directory already exists", async () => {
+    mock = await startMockGitHub([]);
+    await run(["init"]);
+    await expect(run(["init"])).rejects.toThrow(/already exists/);
+  });
+
+  it("queue-inline-comment + queue-inline-comment + comment-review posts one grouped review", async () => {
     mock = await startMockGitHub([
       {
         method: "GET",
@@ -79,7 +92,7 @@ describe("pr-review CLI", () => {
     const bodyOne = await bodyFile("issue one");
     const bodyTwo = await bodyFile("issue two");
     await run([
-      "queue-comment",
+      "queue-inline-comment",
       "--path",
       "foo.js",
       "--line",
@@ -88,7 +101,7 @@ describe("pr-review CLI", () => {
       bodyOne,
     ]);
     await run([
-      "queue-comment",
+      "queue-inline-comment",
       "--path",
       "bar.js",
       "--line",
@@ -98,7 +111,7 @@ describe("pr-review CLI", () => {
     ]);
 
     const topLevel = await bodyFile("Looks good overall.");
-    const { stdout } = await run(["submit", "--body-file", topLevel]);
+    const { stdout } = await run(["comment-review", "--body-file", topLevel]);
     expect(stdout).toMatch(/Submitted review with 2 inline comment/);
 
     const reviewRequests = mock.requests.filter((r) =>
@@ -114,7 +127,7 @@ describe("pr-review CLI", () => {
     expect(entries.some((e) => e.startsWith("comments.posted-"))).toBe(true);
   });
 
-  it("reusing file for second queue-comment works", async () => {
+  it("reusing file for second queue-inline-comment works", async () => {
     mock = await startMockGitHub([
       {
         method: "GET",
@@ -130,7 +143,7 @@ describe("pr-review CLI", () => {
 
     const commentBody = await bodyFile("ONE");
     await run([
-      "queue-comment",
+      "queue-inline-comment",
       "--path",
       "foo.js",
       "--line",
@@ -141,7 +154,7 @@ describe("pr-review CLI", () => {
 
     await writeFile(commentBody, "TWO");
     await run([
-      "queue-comment",
+      "queue-inline-comment",
       "--path",
       "bar.js",
       "--line",
@@ -150,7 +163,7 @@ describe("pr-review CLI", () => {
       commentBody,
     ]);
 
-    const { stdout } = await run(["submit"]);
+    const { stdout } = await run(["comment-review"]);
     expect(stdout).toMatch(/Submitted review with 2 inline comment/);
 
     const reviewRequests = mock.requests.filter((r) =>
@@ -164,13 +177,13 @@ describe("pr-review CLI", () => {
     expect(reviewRequests[0].body.body).toBe("");
   });
 
-  it("submit with nothing queued and no body fails without calling the API", async () => {
+  it("comment-review with nothing queued and no body fails without calling the API", async () => {
     mock = await startMockGitHub([]);
-    await expect(run(["submit"])).rejects.toThrow(/Nothing to submit/);
+    await expect(run(["comment-review"])).rejects.toThrow(/Nothing to submit/);
     expect(mock.requests).toHaveLength(0);
   });
 
-  it("submit with only a body posts a comments-only review", async () => {
+  it("comment-review with only a body posts a comments-only review", async () => {
     mock = await startMockGitHub([
       {
         method: "GET",
@@ -184,7 +197,7 @@ describe("pr-review CLI", () => {
       },
     ]);
     const topLevel = await bodyFile("Nothing to flag inline.");
-    await run(["submit", "--body-file", topLevel]);
+    await run(["comment-review", "--body-file", topLevel]);
 
     const [reviewRequest] = mock.requests.filter((r) =>
       r.url.endsWith("/reviews"),
@@ -193,12 +206,12 @@ describe("pr-review CLI", () => {
     expect(reviewRequest.body.body).toBe("Nothing to flag inline.");
   });
 
-  it("queue-comment rejects startLine >= line", async () => {
+  it("queue-inline-comment rejects startLine >= line", async () => {
     mock = await startMockGitHub([]);
     const body = await bodyFile("issue");
     await expect(
       run([
-        "queue-comment",
+        "queue-inline-comment",
         "--path",
         "foo.js",
         "--line",
@@ -211,7 +224,7 @@ describe("pr-review CLI", () => {
     ).rejects.toThrow(/start-line/);
   });
 
-  it("reply posts immediately", async () => {
+  it("reply-inline-comment posts immediately", async () => {
     mock = await startMockGitHub([
       {
         method: "POST",
@@ -221,7 +234,7 @@ describe("pr-review CLI", () => {
     ]);
     const body = await bodyFile("interesting reply");
     const { stdout } = await run([
-      "reply",
+      "reply-inline-comment",
       "--comment-id",
       "123",
       "--body-file",
@@ -237,18 +250,234 @@ describe("pr-review CLI", () => {
     "/widgets",
     "acme",
   ])(
-    "reply rejects a malformed GITHUB_REPOSITORY (%s) without calling the API",
+    "reply-inline-comment rejects a malformed GITHUB_REPOSITORY (%s) without calling the API",
     async (repo) => {
       mock = await startMockGitHub([]);
       const body = await bodyFile("x");
       await expect(
-        run(["reply", "--comment-id", "123", "--body-file", body], {
-          GITHUB_REPOSITORY: repo,
-        }),
+        run(
+          ["reply-inline-comment", "--comment-id", "123", "--body-file", body],
+          { GITHUB_REPOSITORY: repo },
+        ),
       ).rejects.toThrow(/owner\/repo form/);
       expect(mock.requests).toHaveLength(0);
     },
   );
+
+  it("approve-review posts an APPROVE event with no comments queued", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "GET",
+        pattern: /\/pulls\/5$/,
+        body: { head: { sha: "deadbeef" } },
+      },
+      {
+        method: "POST",
+        pattern: /\/pulls\/5\/reviews$/,
+        body: { id: 115, html_url: "https://example/review/115" },
+      },
+    ]);
+    const { stdout } = await run(["approve-review"]);
+    expect(stdout).toMatch(/Submitted APPROVE review with 0 inline comment/);
+
+    const [reviewRequest] = mock.requests.filter((r) =>
+      r.url.endsWith("/reviews"),
+    );
+    expect(reviewRequest.body).toMatchObject({ event: "APPROVE", body: "" });
+  });
+
+  it("approve-review accepts an optional body and includes queued inline comments", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "GET",
+        pattern: /\/pulls\/5$/,
+        body: { head: { sha: "deadbeef" } },
+      },
+      {
+        method: "POST",
+        pattern: /\/pulls\/5\/reviews$/,
+        body: { id: 116, html_url: "https://example/review/116" },
+      },
+    ]);
+    const commentBody = await bodyFile("nice touch");
+    await run([
+      "queue-inline-comment",
+      "--path",
+      "foo.js",
+      "--line",
+      "10",
+      "--body-file",
+      commentBody,
+    ]);
+
+    const body = await bodyFile("Looks great.");
+    const { stdout } = await run(["approve-review", "--body-file", body]);
+    expect(stdout).toMatch(/Submitted APPROVE review with 1 inline comment/);
+
+    const [reviewRequest] = mock.requests.filter((r) =>
+      r.url.endsWith("/reviews"),
+    );
+    expect(reviewRequest.body).toMatchObject({
+      event: "APPROVE",
+      body: "Looks great.",
+    });
+    expect(reviewRequest.body.comments).toHaveLength(1);
+  });
+
+  it("approve-review falls back to a comment when GitHub rejects the approval", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "GET",
+        pattern: /\/pulls\/5$/,
+        body: { head: { sha: "deadbeef" } },
+      },
+      {
+        method: "POST",
+        pattern: /\/pulls\/5\/reviews$/,
+        responses: [
+          {
+            status: 422,
+            body: {
+              message: "Unprocessable Entity",
+              errors: [
+                "GitHub Actions is not permitted to approve pull requests.",
+              ],
+              status: "422",
+            },
+          },
+          { body: { id: 118, html_url: "https://example/review/118" } },
+        ],
+      },
+    ]);
+    const body = await bodyFile("Looks great.");
+    const { stdout } = await run(["approve-review", "--body-file", body]);
+    expect(stdout).toMatch(/didn't allow approving.*submitted as a comment/s);
+
+    const reviewRequests = mock.requests.filter((r) =>
+      r.url.endsWith("/reviews"),
+    );
+    expect(reviewRequests).toHaveLength(2);
+    expect(reviewRequests[0].body.event).toBe("APPROVE");
+    expect(reviewRequests[1].body.event).toBe("COMMENT");
+    expect(reviewRequests[1].body.body).toContain("Looks great.");
+    expect(reviewRequests[1].body.body).toContain(
+      "submitted as a comment instead of an approval",
+    );
+  });
+
+  it("request-changes-review requires --body-file", async () => {
+    mock = await startMockGitHub([]);
+    await expect(run(["request-changes-review"])).rejects.toThrow(
+      /--body-file is required/,
+    );
+    expect(mock.requests).toHaveLength(0);
+  });
+
+  it("request-changes-review posts a REQUEST_CHANGES event with queued inline comments", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "GET",
+        pattern: /\/pulls\/5$/,
+        body: { head: { sha: "deadbeef" } },
+      },
+      {
+        method: "POST",
+        pattern: /\/pulls\/5\/reviews$/,
+        body: { id: 117, html_url: "https://example/review/117" },
+      },
+    ]);
+    const commentBody = await bodyFile("this is broken");
+    await run([
+      "queue-inline-comment",
+      "--path",
+      "foo.js",
+      "--line",
+      "10",
+      "--body-file",
+      commentBody,
+    ]);
+
+    const body = await bodyFile("Please address the security issue.");
+    const { stdout } = await run([
+      "request-changes-review",
+      "--body-file",
+      body,
+    ]);
+    expect(stdout).toMatch(
+      /Submitted REQUEST_CHANGES review with 1 inline comment/,
+    );
+
+    const [reviewRequest] = mock.requests.filter((r) =>
+      r.url.endsWith("/reviews"),
+    );
+    expect(reviewRequest.body).toMatchObject({
+      event: "REQUEST_CHANGES",
+      body: "Please address the security issue.",
+    });
+    expect(reviewRequest.body.comments).toHaveLength(1);
+  });
+
+  it("resolve-thread requires --thread-id", async () => {
+    mock = await startMockGitHub([]);
+    await expect(run(["resolve-thread"])).rejects.toThrow(
+      /--thread-id is required/,
+    );
+    expect(mock.requests).toHaveLength(0);
+  });
+
+  it("resolve-thread resolves the given thread", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "POST",
+        pattern: /\/graphql$/,
+        body: { data: { resolveReviewThread: { thread: { id: "thread1" } } } },
+      },
+    ]);
+    const { stdout } = await run(["resolve-thread", "--thread-id", "thread1"], {
+      GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
+    });
+    expect(stdout).toMatch(/Resolved thread thread1/);
+
+    expect(mock.requests[0].body.variables).toEqual({ threadId: "thread1" });
+  });
+
+  it("hide-review requires --review-id", async () => {
+    mock = await startMockGitHub([]);
+    await expect(run(["hide-review"])).rejects.toThrow(
+      /--review-id is required/,
+    );
+    expect(mock.requests).toHaveLength(0);
+  });
+
+  it("hide-review minimizes the given review as outdated", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "GET",
+        pattern: /\/pulls\/5\/reviews\/111$/,
+        body: { node_id: "review-node-1" },
+      },
+      {
+        method: "POST",
+        pattern: /\/graphql$/,
+        body: {
+          data: {
+            minimizeComment: { minimizedComment: { isMinimized: true } },
+          },
+        },
+      },
+    ]);
+    const { stdout } = await run(["hide-review", "--review-id", "111"], {
+      GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
+    });
+    expect(stdout).toMatch(/Hid review 111 as outdated/);
+
+    const [graphqlRequest] = mock.requests.filter((r) =>
+      r.url.endsWith("/graphql"),
+    );
+    expect(graphqlRequest.body.variables).toEqual({
+      subjectId: "review-node-1",
+    });
+  });
 
   it("sweep posts a batch Claude queued but never submitted", async () => {
     mock = await startMockGitHub([
@@ -265,7 +494,7 @@ describe("pr-review CLI", () => {
     ]);
     const body = await bodyFile("forgotten issue");
     await run([
-      "queue-comment",
+      "queue-inline-comment",
       "--path",
       "foo.js",
       "--line",
@@ -284,7 +513,7 @@ describe("pr-review CLI", () => {
     expect(reviewRequests[0].body.comments).toHaveLength(1);
   });
 
-  it("sweep retries an abandoned claimed batch left by a crashed submit", async () => {
+  it("sweep retries an abandoned claimed batch left by a crashed comment-review", async () => {
     mock = await startMockGitHub([
       {
         method: "GET",
@@ -337,5 +566,68 @@ describe("pr-review CLI", () => {
     const { stdout } = await run(["sweep"]);
     expect(stdout).toMatch(/Nothing to sweep/);
     expect(mock.requests).toHaveLength(0);
+  });
+
+  it("sweep retries an abandoned APPROVE batch with the recorded event", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "GET",
+        pattern: /\/pulls\/5$/,
+        body: { head: { sha: "deadbeef" } },
+      },
+      {
+        method: "POST",
+        pattern: /\/pulls\/5\/reviews$/,
+        body: { id: 119, html_url: "https://example/review/119" },
+      },
+    ]);
+
+    // Simulate a crashed approve-review: claimed, event recorded, but the
+    // POST never happened.
+    const claimedDir = path.join(queueDir, "comments.claimed-1-999-approve");
+    await mkdir(claimedDir, { recursive: true });
+    await writeFile(path.join(claimedDir, "_event.txt"), "APPROVE");
+    await writeFile(path.join(claimedDir, "_body.txt"), "ship it");
+
+    const { stdout } = await run(["sweep"]);
+    expect(stdout).toMatch(/Swept 1 pending submission/);
+
+    const [reviewRequest] = mock.requests.filter((r) =>
+      r.url.endsWith("/reviews"),
+    );
+    expect(reviewRequest.body).toMatchObject({
+      event: "APPROVE",
+      body: "ship it",
+    });
+  });
+
+  it("sweep --downgrade-approval forces a queued APPROVE to a COMMENT", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "GET",
+        pattern: /\/pulls\/5$/,
+        body: { head: { sha: "deadbeef" } },
+      },
+      {
+        method: "POST",
+        pattern: /\/pulls\/5\/reviews$/,
+        body: { id: 120, html_url: "https://example/review/120" },
+      },
+    ]);
+
+    const claimedDir = path.join(queueDir, "comments.claimed-1-999-approve2");
+    await mkdir(claimedDir, { recursive: true });
+    await writeFile(path.join(claimedDir, "_event.txt"), "APPROVE");
+    await writeFile(path.join(claimedDir, "_body.txt"), "ship it");
+
+    const { stdout } = await run(["sweep", "--downgrade-approval"]);
+    expect(stdout).toMatch(/Swept 1 pending submission/);
+
+    const [reviewRequest] = mock.requests.filter((r) =>
+      r.url.endsWith("/reviews"),
+    );
+    expect(reviewRequest.body.event).toBe("COMMENT");
+    expect(reviewRequest.body.body).toContain("ship it");
+    expect(reviewRequest.body.body).toContain("didn't complete cleanly");
   });
 });
