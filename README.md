@@ -34,8 +34,7 @@ Claude Code OAuth token for use with a subscription account. Generate with `clau
 ### `prompt`
 
 Prompt sent to Claude for both initial reviews and re-reviews. Claude determines
-the current state of the PR from the discussion context included at the end of
-the prompt. Defaults to:
+the current state of the PR from context. Defaults to:
 
 <!-- default:prompt -->
 
@@ -46,14 +45,6 @@ the prompt. Defaults to:
     this as a re-review. Respond to discussion as appropriate, and review new
     changes. If nothing has changed there is no need to note it unless the
     user seems to think that changes were made.
-
-<!-- /default:prompt -->
-
-### `prompt-suffix`
-
-Added to the end of `prompt`. Defaults to:
-
-<!-- default:prompt-suffix -->
 
     Only post GitHub comments — don't submit review text as messages.
 
@@ -81,11 +72,11 @@ Added to the end of `prompt`. Defaults to:
     - `#pullrequestreview-ID` — a top-level review comment.
     - `#issuecomment-ID` — a top-level non-review comment.
 
-<!-- /default:prompt-suffix -->
+<!-- /default:prompt -->
 
-### `additional-prompt-suffix`
+### `additional-prompt`
 
-Appended after `prompt-suffix`. Empty default.
+Appended after `prompt`. Empty default.
 
 This is useful if you just want to add text to the default prompt.
 
