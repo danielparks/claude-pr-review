@@ -284,3 +284,16 @@ runs:
           FLAGS+=(--downgrade-approval)
         fi
         node "$CLI_SCRIPT" sweep "${FLAGS[@]}"
+
+    # This is a temporary step that will be removed before merge. It can be
+    # ignored because the zizmor check requires that the action be pinned, so
+    # checks will always fail while it is present.
+    - name: DEBUG Claude output to verify prompt and permissions
+      uses: actions/upload-artifact@v7
+      # Runs even if Claude failed.
+      if: always() && steps.diff.outputs.skip != 'true'
+      with:
+        # This is a static path where Claude writes an output log that includes
+        # tool uses and their results.
+        path: /home/runner/work/_temp/claude-execution-output.json
+        archive: false
