@@ -88,10 +88,10 @@ inputs:
       List of additional tools to allow Claude to use, one per line. Added to
       `allowed-tools` and then passed to `--allowedTools`.
 
-      This is useful if you just want to add a tool to the default tool list.
-      In particular, see the "Opt-in tools" section of `cli/README.md` for
-      `pr-review` subcommands that are deliberately left out of the default
-      list.
+      This is useful if you just want to extend the default tool list. In
+      particular, see the “Opt-in tools” section of `cli/README.md` for
+      `pr-review` subcommands that are deliberately excluded from the default
+      `allowed-tools` list.
     default:
   gh-pr-render-version:
     description: Version of the `gh-pr-render` tool to use.
@@ -251,11 +251,9 @@ runs:
         # write` and the app is installed.
         GITHUB_TOKEN: ${{ steps.claude.outputs.github_token || github.token }}
         CLI_SCRIPT: ${{ github.action_path }}/cli/pr-review
-        # Never let a queued APPROVE go out unattended when either the run
-        # itself didn't succeed, or we only have the lower-privilege
-        # fallback token instead of the Claude App token -- neither
-        # circumstance should get to submit an approval sweep never
-        # actually watched happen live.
+        # Downgrade queued APPROVEs when:
+        #   - The Claude step didn't succeed
+        #   - We did not get the Claude App (claude[bot]) token
         DOWNGRADE_APPROVAL: ${{ (steps.claude.outputs.github_token == '' || steps.claude.outcome != 'success') && 'true' || '' }}
       run: |
         set -euo pipefail

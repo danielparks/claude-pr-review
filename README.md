@@ -107,7 +107,7 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
 
 List of additional tools to allow Claude to use, one per line. Added to `allowed-tools` and then passed to `--allowedTools`. Empty default.
 
-This is useful if you just want to add a tool to the default tool list. In particular, see the ["Opt-in tools"](cli/README.md#opt-in-tools) section of [`cli/README.md`] for `pr-review` subcommands that are deliberately left out of the default list.
+This is useful if you just want to add a tool to the default tool list. In particular, see the [“Opt-in tools”][opt-in-tools] section of [`cli/README.md`] for `pr-review` subcommands that are deliberately left out of the default list.
 
 ### `gh-pr-render-version`
 
@@ -125,7 +125,7 @@ This action bundles its own CLI tool, [`cli/pr-review`], that `action.yaml` puts
 
 [anthropics/claude-code-action]'s built-in inline-comment tool posts each inline comment through GitHub's single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.
 
-This is a Bash-invoked CLI tool rather than an MCP server so that it can post as `claude[bot]` instead of `github-actions[bot]`: the Claude App token only reaches subprocesses that inherit [anthropics/claude-code-action]'s real environment, which a Bash-tool call does and an MCP server does not. It's plain, dependency-free JavaScript that `action.yaml` runs directly with no build step — see [`cli/README.md`] for more information, including the [opt-in `pr-review` subcommands](cli/README.md#opt-in-tools) that are left out of the default `allowed-tools` list.
+This is a Bash-invoked CLI tool rather than an MCP server so that it can post as `claude[bot]` instead of `github-actions[bot]`: the Claude App token only reaches subprocesses that inherit [anthropics/claude-code-action]'s real environment, which a Bash-tool call does and an MCP server does not. It's plain, dependency-free JavaScript that `action.yaml` runs directly with no build step — see [`cli/README.md`] for more information, including the [opt-in `pr-review` subcommands][opt-in-tools] that are left out of the default `allowed-tools` list.
 
 ### PR updates
 
@@ -138,4 +138,5 @@ If the changes are not identical then this provides Claude with a diff-of-diffs 
 [workflow-response.yaml]: workflow-response.yaml
 [anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action
 [`cli/pr-review`]: cli/pr-review
+[opt-in-tools]: cli/README.md#opt-in-tools
 [`cli/README.md`]: cli/README.md

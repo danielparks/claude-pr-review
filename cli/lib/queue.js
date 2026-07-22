@@ -115,9 +115,8 @@ export async function claim(root) {
 
 /**
  * Read every queued comment (in filename order), plus the body and event,
- * if set. Defaults to "COMMENT" if `setEvent` was never called, since older
- * queued batches (or a plain `queue-inline-comment` + crash, pre-dating
- * `setEvent`) only ever meant a comment review.
+ * if set. Defaults to "COMMENT" if `setEvent` was never called, e.g. when
+ * Claude only creates inline comments and no actual review.
  */
 export async function readBatch(claimedDir) {
   const entries = await readdir(claimedDir);
