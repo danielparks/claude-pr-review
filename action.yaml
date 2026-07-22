@@ -35,9 +35,10 @@ inputs:
 
       Only post GitHub comments — don't submit review text as messages.
 
-      For the commands below: write the comment body to a file under /tmp first
-      (e.g. with the Write tool), then pass that file's path with `--body-file`.
-      This avoids dealing with shell special characters.
+      For the commands below: write the comment body to a file under
+      /tmp/pr-review-scratch first (e.g. with the Write tool), then pass that
+      file's path with `--body-file`. This avoids dealing with shell special
+      characters.
 
       1. Use `pr-review reply-inline-comment --comment-id ID --body-file PATH`
          to reply to existing inline comments if they have been resolved, if
@@ -70,7 +71,7 @@ inputs:
       `--allowedTools`.
     default: |
       Read
-      Write(/tmp/**)
+      Write(//tmp/pr-review-scratch/**)
       Bash(find:*)
       Bash(grep:*)
       Bash(git log:*)
@@ -131,6 +132,12 @@ runs:
         echo "$CLI_DIR" >> "$GITHUB_PATH"
         echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
         node "$CLI_DIR/pr-review" init
+
+        # Scratch space for Claude to stage --body-file content in (see the
+        # prompt default). Unlike the queue directory, pr-review itself never
+        # reads or writes here, so this is just a plain mkdir -p rather than
+        # something pr-review's init command needs to know about.
+        mkdir -p /tmp/pr-review-scratch
 
     - name: diff cache
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -239,7 +246,13 @@ runs:
           ${{ steps.diff.outputs.diff_section }}
 
           ${{ steps.render.outputs.pr_context }}
-        claude_args: --allowedTools "${{ steps.tools.outputs.list }}"
+        # --add-dir only extends Bash's own output-redirection sandbox (and
+        # frictionless reads) for /tmp/pr-review-scratch -- it does NOT
+        # affect the Write tool's own permission check, which the
+        # Write(...) rule in allowed-tools handles independently. This is
+        # purely a fallback in case Claude reaches for Bash (cat >, a
+        # heredoc) instead of the Write tool to stage --body-file content.
+        claude_args: --allowedTools "${{ steps.tools.outputs.list }}" --add-dir /tmp/pr-review-scratch
 
     - name: Submit any review comments Claude queued but didn't post
       # Runs even if the step above failed or Claude never called
