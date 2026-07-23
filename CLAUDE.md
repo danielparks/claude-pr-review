@@ -1,7 +1,3 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## What this is
 
 `claude-pr-review` is a GitHub Action (`action.yaml`) that wraps `anthropics/claude-code-action` to give Claude context for reviewing pull requests: full PR discussion, inline comments with their nearest diff fragment, and a diff-of-diffs on re-review. It bundles its own CLI (`cli/pr-review`) that Claude invokes via its Bash tool to post review comments as `claude[bot]`.
@@ -30,7 +26,7 @@ scripts/generate-workflows # regenerate .github/workflows/ from workflow-*.yaml 
 scripts/zizmor-online --persona=pedantic  # zizmor lint for the workflow/action YAML
 ```
 
-`sync-readme` and `generate-workflows` are also pre-commit hooks — if you edit `action.yaml`, `README.md`, or `workflow-*.yaml`, run the relevant script (or `prek run --all-files`) so generated content stays in sync before committing.
+`sync-readme` and `generate-workflows` are also pre-commit hooks — if you edit `action.yaml`, `README.md`, or `workflow-*.yaml`, run the relevant script (or `pre-commit run --all-files`) so generated content stays in sync before committing.
 
 ## Architecture
 
