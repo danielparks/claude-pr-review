@@ -19,8 +19,7 @@ import {
   queueComment,
   queueRoot,
   readBatch,
-  setBody,
-  setEvent,
+  setReview,
 } from "./lib/queue.js";
 import {
   apiErrorHint,
@@ -71,15 +70,15 @@ function positiveInt(value, label) {
   return n;
 }
 
-async function readBodyFile(filePath, { required }) {
-  if (!filePath) {
+async function readBodyFile(path, { required }) {
+  if (!path) {
     if (required) fail("--body-file is required");
     return "";
   }
-  const raw = await readFile(filePath, "utf8");
-  const body = redactGitHubTokens(raw);
+
+  const body = redactGitHubTokens(await readFile(path, "utf8"));
   if (required && !body.trim()) {
-    fail(`--body-file (${filePath}) is empty`);
+    fail(`--body-file (${path}) is empty`);
   }
   return body;
 }
@@ -241,27 +240,17 @@ async function submitClaimedBatch(claimedDir, { forceDowngradeApproval } = {}) {
 }
 
 /**
- * Record event, claim batch, and submit to GitHub.
+ * Claim batch, record review, and submit to GitHub.
  *
- * Writing `--body-file` is conditional (no point creating an empty
- * `_body.txt`). `setEvent` always runs because it’s possible to have a bare
- * `approve-review` with no comments and no body.
+ * If another subagent runs this at the same time, the winner will submit its
+ * review with the queued comments, while the loser will only have the review.
+ * If the loser has a COMMENT review with no body, then it will return
+ * `skipped: true`, otherwise the review will be submitted with no comments.
  */
-async function finalizeReview(args, event, { requireBody }) {
-  const { values } = parseArgs({
-    args,
-    options: { "body-file": { type: "string" } },
-  });
-  const root = queueRoot();
-  if (values["body-file"] || requireBody) {
-    const body = await readBodyFile(values["body-file"], {
-      required: requireBody,
-    });
-    await setBody(root, body);
-  }
-  await setEvent(root, event);
+async function finalizeReview(event, body) {
+  const claimedDir = await claim(queueRoot(), { create: true });
+  await setReview(claimedDir, event, body);
 
-  const claimedDir = await claim(root);
   try {
     return await submitClaimedBatch(claimedDir);
   } catch (error) {
@@ -270,9 +259,14 @@ async function finalizeReview(args, event, { requireBody }) {
 }
 
 async function cmdCommentReview(args) {
-  const { comments, result, skipped } = await finalizeReview(args, "COMMENT", {
-    requireBody: false,
+  const { values } = parseArgs({
+    args,
+    options: { "body-file": { type: "string" } },
   });
+  const { comments, result, skipped } = await finalizeReview(
+    "COMMENT",
+    await readBodyFile(values["body-file"], { required: false }),
+  );
   if (skipped) {
     fail(
       "Nothing to submit: call queue-inline-comment first, or pass " +
@@ -285,9 +279,14 @@ async function cmdCommentReview(args) {
 }
 
 async function cmdApproveReview(args) {
-  const { comments, event, result } = await finalizeReview(args, "APPROVE", {
-    requireBody: false,
+  const { values } = parseArgs({
+    args,
+    options: { "body-file": { type: "string" } },
   });
+  const { comments, event, result } = await finalizeReview(
+    "APPROVE",
+    await readBodyFile(values["body-file"], { required: false }),
+  );
   if (event === "APPROVE") {
     console.log(
       `Submitted APPROVE review with ${comments.length} inline comment(s): ${result.html_url}`,
@@ -301,9 +300,14 @@ async function cmdApproveReview(args) {
 }
 
 async function cmdRequestChangesReview(args) {
-  const { comments, result } = await finalizeReview(args, "REQUEST_CHANGES", {
-    requireBody: true,
+  const { values } = parseArgs({
+    args,
+    options: { "body-file": { type: "string" } },
   });
+  const { comments, result } = await finalizeReview(
+    "REQUEST_CHANGES",
+    await readBodyFile(values["body-file"], { required: true }),
+  );
   console.log(
     `Submitted REQUEST_CHANGES review with ${comments.length} inline comment(s): ${result.html_url}`,
   );

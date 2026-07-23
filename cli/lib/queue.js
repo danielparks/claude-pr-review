@@ -19,7 +19,7 @@
 // the post ever succeeded — the sweep step retries the latter and just
 // ignores (or tidies up) the former.
 //
-// `_event.txt` (written by `setEvent`) records which review event a
+// `_event.txt` (written by `setReview`) records which review event a
 // finalizing command decided on -- COMMENT, APPROVE, or REQUEST_CHANGES --
 // so that if a crash happens after the decision but before the API call
 // succeeds, a retry (whether live or from `sweep`) knows what it's actually
@@ -74,22 +74,14 @@ export async function queueComment(root, comment) {
   return final;
 }
 
-/** Set (or replace) the top-level review body for the live batch. */
-export async function setBody(root, body) {
-  const dir = commentsDir(root);
-  await mkdir(dir, { recursive: true });
-  await writeAtomic(path.join(dir, "_body.txt"), body);
-}
-
 /**
- * Set (or replace) the review event for the current review.
+ * Set the event and body for the claimed review.
  *
  * Review events are "COMMENT", "APPROVE", or "REQUEST_CHANGES".
  */
-export async function setEvent(root, event) {
-  const dir = commentsDir(root);
-  await mkdir(dir, { recursive: true });
-  await writeAtomic(path.join(dir, "_event.txt"), event);
+export async function setReview(claimDir, event, body) {
+  await writeAtomic(path.join(claimDir, "_event.txt"), event);
+  await writeAtomic(path.join(claimDir, "_body.txt"), body);
 }
 
 /**
@@ -97,8 +89,12 @@ export async function setEvent(root, event) {
  *
  * Returns the claimed directory's path, or null if there's nothing queued
  * (no comments and no body were ever added).
+ *
+ * If `create` is `true`, this will create an empty claimed directory if the
+ * comments directory does not exist, e.g. some other process got it before us.
+ * In this case it will never return null.
  */
-export async function claim(root) {
+export async function claim(root, { create = false } = {}) {
   const dir = commentsDir(root);
   const claimed = path.join(
     root,
@@ -108,7 +104,12 @@ export async function claim(root) {
     await rename(dir, claimed);
     return claimed;
   } catch (error) {
-    if (error.code === "ENOENT") return null;
+    if (error.code === "ENOENT") {
+      if (!create) return null;
+      await mkdir(root, { recursive: true });
+      await mkdir(claimed); // exclusive create
+      return claimed;
+    }
     throw error;
   }
 }
@@ -116,7 +117,7 @@ export async function claim(root) {
 /**
  * Read every queued comment in filename order, the body, and the event.
  *
- * Defaults to "COMMENT" if `setEvent` was never called, e.g. when Claude only
+ * Defaults to "COMMENT" if `setReview` was never called, e.g. when Claude only
  * creates inline comments and never submits an actual review.
  */
 export async function readBatch(claimedDir) {

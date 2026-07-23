@@ -9,8 +9,7 @@ import {
   markPosted,
   queueComment,
   readBatch,
-  setBody,
-  setEvent,
+  setReview,
 } from "../lib/queue.js";
 
 function comment(path_) {
@@ -75,37 +74,36 @@ describe("queue", () => {
   it("claim() -> readBatch() round-trips comments and body", async () => {
     await queueComment(root, comment("a.txt"));
     await queueComment(root, comment("b.txt"));
-    await setBody(root, "top-level notes");
 
     const claimed = await claim(root);
+    await setReview(claimed, "COMMENT", "top-level notes");
     const { comments, body } = await readBatch(claimed);
     expect(comments).toHaveLength(2);
     expect(body).toBe("top-level notes");
   });
 
-  it("readBatch() defaults event to COMMENT when setEvent() was never called", async () => {
+  it("readBatch() defaults event to COMMENT when setReview() was never called", async () => {
     await queueComment(root, comment("a.txt"));
     const claimed = await claim(root);
     expect((await readBatch(claimed)).event).toBe("COMMENT");
   });
 
-  it("claim() -> readBatch() round-trips the event set by setEvent()", async () => {
+  it("claim() -> readBatch() round-trips the event set by setReview()", async () => {
     await queueComment(root, comment("a.txt"));
-    await setEvent(root, "APPROVE");
 
     const claimed = await claim(root);
+    await setReview(claimed, "APPROVE", "");
     expect((await readBatch(claimed)).event).toBe("APPROVE");
   });
 
-  it("setEvent() alone creates the batch, so claim() doesn't return null", async () => {
-    await setEvent(root, "APPROVE");
-    const claimed = await claim(root);
+  it("claim() can create an empty claimed directory", async () => {
+    const claimed = await claim(root, { create: true });
     expect(claimed).not.toBeNull();
 
     const { comments, body, event } = await readBatch(claimed);
     expect(comments).toEqual([]);
     expect(body).toBe("");
-    expect(event).toBe("APPROVE");
+    expect(event).toBe("COMMENT");
   });
 
   it("queueComment() after a claim() starts a fresh batch", async () => {

@@ -16,9 +16,16 @@ This has zero runtime dependencies — it's plain JavaScript using the built-in 
 
 Comments are queued as one file per comment (`$RUNNER_TEMP/pr-review-queue/comments/<timestamp>-<uuid>.json`) rather than held in memory, because `pr-review` is a fresh process on every invocation — there's no long-lived server to hold state. Each `queue-inline-comment` call only ever creates a new, uniquely-named file, so concurrent invocations can never collide; there's nothing to lock.
 
-`comment-review`, `approve-review`, and `request-changes-review` all finalize the batch the same way: they record which event was decided (`_event.txt`, via `setEvent`) alongside the body, then claim it with a single atomic rename (`comments/` → `comments.claimed-<ts>-<pid>-<uuid>/`), post it as one grouped review, and rename it again to `comments.posted-<ts>-<pid>-<uuid>/` only after a confirmed-successful response. All three states are encoded in the directory name, so a completely separate process — the deferred `sweep` step `action.yaml` runs after Claude's turn ends — can always tell what happened without reading any file content:
+`comment-review`, `approve-review`, and `request-changes-review` all finalize the batch the same way:
 
-- `comments/` still exists → Claude queued things but never finalized; sweep claims and posts it as whatever event (if any) was recorded, defaulting to `COMMENT` if `setEvent` was never called. This is what lets Claude skip calling `comment-review` at all when it has nothing to add beyond the inline comments.
+1. They atomically claim the batch with a single atomic rename (`comments/` → `comments.claimed-<timestamp>-<pid>-<uuid>/`).
+2. Record the review (`_event.txt` and `_body.txt`).
+3. Post it as one grouped review.
+4. Rename the batch directory again to `comments.posted-<timestamp>-<pid>-<uuid>/` if it got a successful response.
+
+Three states are encoded in the directory name, so a completely separate process — the deferred `sweep` step `action.yaml` runs after Claude's turn ends — can always tell what happened without reading any file content:
+
+- `comments/` still exists → Claude queued things but never finalized; sweep claims and posts it as a `COMMENT`. This is what lets Claude skip calling `comment-review` at all when it has nothing to add beyond the inline comments.
 - `comments.claimed-*/` exists → a finalizing call claimed a batch and then crashed before confirming success; sweep retries it with the same event it was originally going to submit.
 - `comments.posted-*/` → already posted; sweep ignores it.
 
