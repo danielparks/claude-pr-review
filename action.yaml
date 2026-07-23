@@ -69,6 +69,8 @@ inputs:
     description: >
       List of tools to allow Claude to use, one per line. Passed to
       `--allowedTools`.
+    # Note that absolute paths require a double slash prefix. See the docs:
+    # https://code.claude.com/docs/en/permissions#read-and-edit
     default: |
       Read
       Write(//tmp/pr-review-scratch/**)
@@ -249,6 +251,7 @@ runs:
         # allowed-tools. This is a fallback in case Claude reaches for Bash
         # instead of the Write tool to stage --body-file content.
         claude_args: >-
+          --permission-mode dontAsk
           --allowedTools "${{ steps.tools.outputs.list }}"
           --add-dir /tmp/pr-review-scratch
 
