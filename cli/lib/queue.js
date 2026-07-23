@@ -44,11 +44,12 @@ export function queueRoot() {
 }
 
 /**
- * Exclusively create the queue root -- fails (EEXIST) if it already
- * exists. Meant to be called once, by `pr-review init`, before Claude's
- * turn starts, so nothing that ran earlier in the same job -- or left over
- * on a reused self-hosted runner -- can have pre-seeded a review decision
- * before Claude ever gets a chance to.
+ * Exclusively create the queue root.
+ *
+ * This fails (EEXIST) if the directory already exists. Meant to be called once,
+ * by `pr-review init`, before Claude's step starts, so nothing that ran earlier
+ * in the same job, or left over on a reused self-hosted runner, can have
+ * pre-seeded a review decision.
  */
 export async function initQueue(root) {
   await mkdir(root);
@@ -81,11 +82,9 @@ export async function setBody(root, body) {
 }
 
 /**
- * Set (or replace) the review event ("COMMENT", "APPROVE", or
- * "REQUEST_CHANGES") for the live batch. Called unconditionally by every
- * finalizing command (even with nothing else queued), so the batch directory
- * always exists once a decision has been made -- including a bare approval
- * with no comments or body.
+ * Set (or replace) the review event for the current review.
+ *
+ * Review events are "COMMENT", "APPROVE", or "REQUEST_CHANGES".
  */
 export async function setEvent(root, event) {
   const dir = commentsDir(root);
@@ -95,6 +94,7 @@ export async function setEvent(root, event) {
 
 /**
  * Atomically claim the live `comments/` directory for submission.
+ *
  * Returns the claimed directory's path, or null if there's nothing queued
  * (no comments and no body were ever added).
  */
@@ -114,9 +114,10 @@ export async function claim(root) {
 }
 
 /**
- * Read every queued comment (in filename order), plus the body and event,
- * if set. Defaults to "COMMENT" if `setEvent` was never called, e.g. when
- * Claude only creates inline comments and no actual review.
+ * Read every queued comment in filename order, the body, and the event.
+ *
+ * Defaults to "COMMENT" if `setEvent` was never called, e.g. when Claude only
+ * creates inline comments and never submits an actual review.
  */
 export async function readBatch(claimedDir) {
   const entries = await readdir(claimedDir);

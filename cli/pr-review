@@ -85,9 +85,9 @@ async function readBodyFile(filePath, { required }) {
 }
 
 /**
- * Called once by `action.yaml`, before Claude's turn starts -- never by
- * Claude itself. See `initQueue`'s doc comment for why this needs to be
- * exclusive rather than just ensuring the directory exists.
+ * Called once by `action.yaml`, before Claude's step starts.
+ *
+ * See `initQueue`'s doc comment for more information.
  */
 async function cmdInit() {
   const root = queueRoot();
@@ -184,13 +184,10 @@ const DOWNGRADE_FORCED_NOTE =
 /**
  * Post one already-claimed batch; mark it posted on success.
  *
- * `forceDowngradeApproval` proactively turns a queued APPROVE into a
- * COMMENT before ever calling the API -- used by `sweep --downgrade-approval`
- * when the circumstances (a failed run, or a lower-privilege fallback token)
- * mean an approval shouldn't be trusted as final. Independent of that flag,
- * an APPROVE that GitHub itself rejects because the token isn't permitted to
- * approve is always retried as a COMMENT -- there's never a good reason to
- * let that specific, known rejection surface as a hard failure instead.
+ * `forceDowngradeApproval` proactively turns a queued APPROVE into a COMMENT
+ * before ever calling the API. Independent of that flag, an APPROVE that GitHub
+ * itself rejects because the token isn't permitted to approve is always retried
+ * as a COMMENT to avoid losing content.
  */
 async function submitClaimedBatch(claimedDir, { forceDowngradeApproval } = {}) {
   const { comments, body, event } = await readBatch(claimedDir);
@@ -244,13 +241,11 @@ async function submitClaimedBatch(claimedDir, { forceDowngradeApproval } = {}) {
 }
 
 /**
- * Shared by `comment-review`, `approve-review`, and `request-changes-review`:
- * record the decided event (and optional body) in the queue, claim it, and
- * submit it. Writing `--body-file` is conditional (no point creating an
- * empty `_body.txt`), but `setEvent` always runs, even with nothing else
- * queued -- that's what makes a bare `approve-review` with no comments and
- * no body work: it still creates the batch directory, so `claim` never
- * returns null.
+ * Record event, claim batch, and submit to GitHub.
+ *
+ * Writing `--body-file` is conditional (no point creating an empty
+ * `_body.txt`). `setEvent` always runs because it’s possible to have a bare
+ * `approve-review` with no comments and no body.
  */
 async function finalizeReview(args, event, { requireBody }) {
   const { values } = parseArgs({
