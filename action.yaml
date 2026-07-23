@@ -133,10 +133,7 @@ runs:
         echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
         node "$CLI_DIR/pr-review" init
 
-        # Scratch space for Claude to stage --body-file content in (see the
-        # prompt default). Unlike the queue directory, pr-review itself never
-        # reads or writes here, so this is just a plain mkdir -p rather than
-        # something pr-review's init command needs to know about.
+        # Scratch space for Claude to stage --body-file content in.
         mkdir -p /tmp/pr-review-scratch
 
     - name: diff cache
@@ -247,12 +244,13 @@ runs:
 
           ${{ steps.render.outputs.pr_context }}
         # --add-dir only extends Bash's own output-redirection sandbox (and
-        # frictionless reads) for /tmp/pr-review-scratch -- it does NOT
-        # affect the Write tool's own permission check, which the
-        # Write(...) rule in allowed-tools handles independently. This is
-        # purely a fallback in case Claude reaches for Bash (cat >, a
-        # heredoc) instead of the Write tool to stage --body-file content.
-        claude_args: --allowedTools "${{ steps.tools.outputs.list }}" --add-dir /tmp/pr-review-scratch
+        # frictionless reads) for /tmp/pr-review-scratch; it does NOT affect the
+        # Write tool's own permission check, which is configured in
+        # allowed-tools. This is a fallback in case Claude reaches for Bash
+        # instead of the Write tool to stage --body-file content.
+        claude_args: >-
+          --allowedTools "${{ steps.tools.outputs.list }}"
+          --add-dir /tmp/pr-review-scratch
 
     - name: Submit any review comments Claude queued but didn't post
       # Runs even if the step above failed or Claude never called
@@ -267,7 +265,15 @@ runs:
         # Downgrade queued APPROVEs when:
         #   - The Claude step didn't succeed
         #   - We did not get the Claude App (claude[bot]) token
-        DOWNGRADE_APPROVAL: ${{ (steps.claude.outputs.github_token == '' || steps.claude.outcome != 'success') && 'true' || '' }}
+        DOWNGRADE_APPROVAL: >-
+          ${{
+            (
+              steps.claude.outputs.github_token == ''
+              || steps.claude.outcome != 'success'
+            )
+            && 'true'
+            || ''
+          }}
       run: |
         set -euo pipefail
         FLAGS=()
