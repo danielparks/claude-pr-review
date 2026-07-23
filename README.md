@@ -49,9 +49,8 @@ the current state of the PR from context. Defaults to:
     Only post GitHub comments — don't submit review text as messages.
 
     For the commands below: write the comment body to a file under
-    /tmp/pr-review-scratch first (e.g. with the Write tool), then pass that
-    file's path with `--body-file`. This avoids dealing with shell special
-    characters.
+    /tmp/pr-review-scratch first with the Write tool, then pass that file's
+    path with `--body-file`. This avoids shell special characters.
 
     1. Use `pr-review reply-inline-comment --comment-id ID --body-file PATH`
        to reply to existing inline comments if they have been resolved, if
@@ -88,7 +87,7 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
 <!-- default:allowed-tools -->
 
     Read
-    Write(//tmp/pr-review-scratch/**)
+    Edit(//tmp/pr-review-scratch/**)
     Bash(find:*)
     Bash(grep:*)
     Bash(git log:*)
