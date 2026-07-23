@@ -97,6 +97,7 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(gh pr view:*)
     Bash(gh run list:*)
     Bash(gh run view:*)
+    Bash(gh-pr-render:*)
     Bash(pr-review queue-inline-comment:*)
     Bash(pr-review reply-inline-comment:*)
     Bash(pr-review comment-review:*)

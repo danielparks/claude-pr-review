@@ -75,6 +75,8 @@ inputs:
     # > `Edit(//secrets/**)` blocks writes anywhere under `/secrets` on disk.
     # > With a single leading slash, `Edit(/secrets/**)` anchors at the rule's
     # > source instead.
+    #
+    # `gh-pr-render` is needed to view long inline comment threads.
     default: |
       Read
       Edit(//tmp/pr-review-scratch/**)
@@ -87,6 +89,7 @@ inputs:
       Bash(gh pr view:*)
       Bash(gh run list:*)
       Bash(gh run view:*)
+      Bash(gh-pr-render:*)
       Bash(pr-review queue-inline-comment:*)
       Bash(pr-review reply-inline-comment:*)
       Bash(pr-review comment-review:*)
@@ -102,7 +105,7 @@ inputs:
     default:
   gh-pr-render-version:
     description: Version of the `gh-pr-render` tool to use.
-    default: 0.4.0
+    default: 0.5.0
 
 runs:
   using: composite
