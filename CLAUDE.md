@@ -32,7 +32,7 @@ scripts/zizmor-online --persona=pedantic  # zizmor lint for the workflow/action 
 
 ### Why a Bash-invoked CLI instead of an MCP server
 
-The Claude App token — what makes review comments post as `claude[bot]` instead of `github-actions[bot]` — only exists inside `anthropics/claude-code-action`'s own process and only reaches subprocesses that inherit its real environment. A Bash-tool call does; an MCP server does not, because the MCP SDK's `StdioClientTransport` spawns servers with a fixed safe env allowlist that has to be built *before* `claude-code-action` (and thus the token) exists. So `cli/pr-review` is a plain, dependency-free JS script that `action.yaml` puts on `PATH` for Claude to run directly with Bash — see `cli/README.md` for the full reasoning and citations.
+The Claude App token — what makes review comments post as `claude[bot]` instead of `github-actions[bot]` — only exists inside `anthropics/claude-code-action`'s own process and only reaches subprocesses that inherit its real environment. A Bash-tool call does; an MCP server does not, because the MCP SDK's `StdioClientTransport` spawns servers with a fixed safe env allowlist that has to be built _before_ `claude-code-action` (and thus the token) exists. So `cli/pr-review` is a plain, dependency-free JS script that `action.yaml` puts on `PATH` for Claude to run directly with Bash — see `cli/README.md` for the full reasoning and citations.
 
 ### `action.yaml` flow
 
@@ -52,7 +52,7 @@ Comments are queued as one file per comment under `comments/` (nothing in memory
 
 Queuing a comment only ever creates a new uniquely-named file, and claiming/marking-posted are single atomic renames, so there is no locking anywhere. See the module doc comment at the top of `cli/lib/queue.js` and the "Why a queue directory" section of `cli/README.md` for the full state machine, including the one known gap (a crash mid-network-request can produce a duplicate review — inherent to the reviews API having no idempotency key).
 
-`APPROVE` has extra downgrade-to-`COMMENT` handling (both proactive, via `--downgrade-approval`, and reactive, if GitHub itself rejects the approval) because an unearned approval is unsafe. `REQUEST_CHANGES` is deliberately never downgraded — see `cli/README.md`'s "Opt-in tools" section for why, and for the `resolve-thread`/`hide-review`/`approve-review`/`request-changes-review` subcommands that are intentionally left out of `action.yaml`'s default `allowed-tools` because they change what kind of thing Claude *is* in a PR (affecting merge state, not just leaving comments).
+`APPROVE` has extra downgrade-to-`COMMENT` handling (both proactive, via `--downgrade-approval`, and reactive, if GitHub itself rejects the approval) because an unearned approval is unsafe. `REQUEST_CHANGES` is deliberately never downgraded — see `cli/README.md`'s "Opt-in tools" section for why, and for the `resolve-thread`/`hide-review`/`approve-review`/`request-changes-review` subcommands that are intentionally left out of `action.yaml`'s default `allowed-tools` because they change what kind of thing Claude _is_ in a PR (affecting merge state, not just leaving comments).
 
 ### Key files
 
