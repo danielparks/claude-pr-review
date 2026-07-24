@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Post PR review comments as claude[bot].
+// Manipulate PR reviews and comments as claude[bot].
 //
 // This is a command line tool because the Bash tool provides the Anthropic
 // GitHub token that allows posting as claude[bot]. An MCP server spawned by the
@@ -317,11 +317,9 @@ async function cmdRequestChangesReview(args) {
 }
 
 /**
- * `checked` guards against Claude resolving a thread it didn't start -- e.g.
- * because someone replied to it, rather than because the underlying issue
- * was actually fixed. `resolve-any-thread` (checked: false) skips that guard
- * for workflows that accept the trade-off; see the "Opt-in tools" section of
- * README.md for both.
+ * Resolve a thread.
+ *
+ * `checked` guards against Claude resolving a thread it didn't start.
  */
 async function doResolveThread(args, { checked }) {
   const { values } = parseArgs({
@@ -347,8 +345,8 @@ async function doResolveThread(args, { checked }) {
       fail(
         `Thread ${threadId}'s first comment was authored by ` +
           `${author ?? "unknown"}, not the authenticated user ` +
-          `(${viewerLogin}) -- use resolve-any-thread instead if you meant ` +
-          "to resolve a thread you didn't start.",
+          `(${viewerLogin}). Use resolve-any-thread instead if you meant to ` +
+          "resolve a thread you didn't start.",
       );
     }
   }
@@ -370,10 +368,9 @@ function cmdResolveAnyThread(args) {
 }
 
 /**
- * `checked` guards against Claude hiding someone else's review -- this is
- * meant for superseding Claude's own stale reviews on re-review, not
- * anyone else's. `hide-any-review` (checked: false) skips that guard; see
- * the "Opt-in tools" section of README.md for both.
+ * Hide a review.
+ *
+ * `checked` guards against Claude hiding someone else's review.
  */
 async function doHideReview(args, { checked }) {
   const { values } = parseArgs({
@@ -400,7 +397,7 @@ async function doHideReview(args, { checked }) {
       fail(
         `Review ${reviewId} was authored by ` +
           `${review.user?.login ?? "unknown"}, not the authenticated user ` +
-          `(${viewerLogin}) -- use hide-any-review instead if you meant to ` +
+          `(${viewerLogin}). Use hide-any-review instead if you meant to ` +
           "hide someone else's review.",
       );
     }

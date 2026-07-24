@@ -127,9 +127,10 @@ export async function getViewerLogin(token) {
 }
 
 /**
- * The login of the author of a review thread's first comment, given the
- * thread's GraphQL node id, or `null` if it has none (shouldn't normally
- * happen for a real thread).
+ * Get the login of the author of a review thread's first comment.
+ *
+ * Takes the thread's GraphQL node id. Returns `null` if there is no first
+ * comment or no author (shouldn't normally happen for a real thread).
  */
 export async function getThreadFirstCommentAuthor(token, threadId) {
   const data = await graphqlRequest(

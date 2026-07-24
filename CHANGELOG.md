@@ -23,8 +23,10 @@ All notable changes to this project will be documented in this file.
 - Added `additional-prompt` input that appends to the default prompt.
 - Added input to configure [gh-pr-render] version.
 - Added opt-in `pr-review` subcommands, none of which are in the default `allowed-tools` list:
-  - `resolve-thread`: mark an inline comment thread resolved. Refuses to run unless the thread's first comment was authored by the authenticated user; `resolve-any-thread` is the same without that check.
-  - `hide-review`: minimize a stale top-level review as outdated. Refuses to run unless the review was authored by the authenticated user; `hide-any-review` is the same without that check.
+  - `resolve-any-thread`: mark an inline comment thread resolved.
+  - `resolve-thread`: mark an inline comment thread resolved. Fails if the thread was started by another user.
+  - `hide-any-review`: minimize a stale top-level review as outdated.
+  - `hide-review`: minimize a stale top-level review as outdated. Fails if the review was authored by another user.
   - `request-changes-review`: submit a review requesting changes.
   - `approve-review`: submit a review approving the changes. If there is a problem with the Claude run, or if we don’t get the `claude[bot]` token, then the review will be downgraded to a comment with a note.
 - Removed `bot-username` input (no longer needed).

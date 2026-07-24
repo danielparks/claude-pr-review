@@ -43,19 +43,19 @@ A few `pr-review` subcommands are deliberately left out of the default `allowed-
 
 ### `resolve-thread --thread-id ID` / `resolve-any-thread --thread-id ID`
 
-Resolves an inline-comment thread via GitHub's `resolveReviewThread` GraphQL mutation, given the thread's GraphQL node id (not a REST comment id — [gh-pr-render] surfaces this alongside its rendered comments).
+Resolves an inline-comment thread via GitHub's `resolveReviewThread` GraphQL mutation, given the thread's GraphQL node id. [gh-pr-render] shows this above the diff at the very start of the thread.
 
 **Danger:** resolving is a judgment call. If Claude resolves a thread because someone replied to it, rather than because the underlying issue was actually fixed, it removes the visual signal a human reviewer relies on to know what's still open.
 
-`resolve-thread` refuses to run unless the thread's first comment was authored by the authenticated user (i.e. Claude started the thread itself), which rules out the most obviously wrong case: resolving a thread someone else opened. It's still a judgment call whether the underlying issue in Claude's own thread was actually fixed — this check doesn't establish that. `resolve-any-thread` is the same mutation with that check removed, for workflows that accept the trade-off.
+`resolve-thread` checks that the thread was started by the authenticated user, i.e. Claude. `resolve-any-thread` is the same mutation without the check, for workflows that accept the trade-off.
 
 ### `hide-review --review-id ID` / `hide-any-review --review-id ID`
 
-Minimizes a top-level review (classified as `OUTDATED`) via GitHub's `minimizeComment` GraphQL mutation, given the review's REST id. Intended for superseding Claude's own stale reviews on re-review, not anyone else's.
+Minimizes a top-level review (classified as `OUTDATED`) via GitHub's `minimizeComment` GraphQL mutation, given the review's REST id.
 
 **Danger:** minimizing isn't easily reversible outside the GraphQL API, and it removes the review from the normal PR timeline for anyone reading it later.
 
-`hide-review` refuses to run unless the review was authored by the authenticated user, matching that stated intent. `hide-any-review` is the same mutation with that check removed, for workflows that accept the trade-off.
+`hide-review` checks that the review was authored by the authenticated user, i.e. Claude. `hide-any-review` is the same mutation without the check, for workflows that accept the trade-off.
 
 ### `approve-review [--body-file PATH]` / `request-changes-review --body-file PATH`
 
