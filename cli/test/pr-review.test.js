@@ -17,15 +17,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { startMockGitHub } from "./support/mock-github.js";
+import { withMockGitHub, filterByUrlEnd } from "./support/mock-github.js";
 
 const execFileAsync = promisify(execFile);
 const CLI_PATH = fileURLToPath(new URL("../pr-review", import.meta.url));
 
 describe("pr-review CLI", () => {
-  let mock;
-  let queueDir;
-  let workDir;
+  let queueDir, workDir;
 
   beforeEach(async () => {
     workDir = await mkdtemp(path.join(tmpdir(), "pr-review-test-"));
@@ -33,7 +31,6 @@ describe("pr-review CLI", () => {
   });
 
   afterEach(async () => {
-    await mock?.close();
     await rm(workDir, { recursive: true, force: true });
   });
 
@@ -44,7 +41,6 @@ describe("pr-review CLI", () => {
       GITHUB_REPOSITORY: "acme/widgets",
       PR_NUMBER: "5",
       PR_REVIEW_QUEUE_DIR: queueDir,
-      GITHUB_API_URL: mock.baseUrl,
       ...extra,
     };
   }
@@ -63,20 +59,22 @@ describe("pr-review CLI", () => {
   }
 
   it("init creates the queue directory", async () => {
-    mock = await startMockGitHub([]);
-    const { stdout } = await run(["init"]);
-    expect(stdout).toMatch(/Created queue directory/);
-    expect(await readdir(queueDir)).toEqual([]);
+    await withMockGitHub(async () => {
+      const { stdout } = await run(["init"]);
+      expect(stdout).toMatch(/Created queue directory/);
+      expect(await readdir(queueDir)).toEqual([]);
+    });
   });
 
   it("init fails if the queue directory already exists", async () => {
-    mock = await startMockGitHub([]);
-    await run(["init"]);
-    await expect(run(["init"])).rejects.toThrow(/already exists/);
+    await withMockGitHub(async () => {
+      await run(["init"]);
+      await expect(run(["init"])).rejects.toThrow(/already exists/);
+    });
   });
 
   it("queue-inline-comment + queue-inline-comment + comment-review posts one grouped review", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -87,48 +85,51 @@ describe("pr-review CLI", () => {
         pattern: /\/pulls\/5\/reviews$/,
         body: { id: 111, html_url: "https://example/review/111" },
       },
-    ]);
 
-    const bodyOne = await bodyFile("issue one");
-    const bodyTwo = await bodyFile("issue two");
-    await run([
-      "queue-inline-comment",
-      "--path",
-      "foo.js",
-      "--line",
-      "10",
-      "--body-file",
-      bodyOne,
-    ]);
-    await run([
-      "queue-inline-comment",
-      "--path",
-      "bar.js",
-      "--line",
-      "20",
-      "--body-file",
-      bodyTwo,
-    ]);
+      async ({ requests }) => {
+        await run([
+          "queue-inline-comment",
+          "--path",
+          "foo.js",
+          "--line",
+          "10",
+          "--body-file",
+          await bodyFile("issue one"),
+        ]);
+        await run([
+          "queue-inline-comment",
+          "--path",
+          "bar.js",
+          "--line",
+          "20",
+          "--body-file",
+          await bodyFile("issue two"),
+        ]);
 
-    const topLevel = await bodyFile("Looks good overall.");
-    const { stdout } = await run(["comment-review", "--body-file", topLevel]);
-    expect(stdout).toMatch(/Submitted review with 2 inline comment/);
+        const { stdout } = await run([
+          "comment-review",
+          "--body-file",
+          await bodyFile("Looks good overall."),
+        ]);
+        expect(stdout).toMatch(/Submitted review with 2 inline comment/);
 
-    const reviewRequests = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
+        const reviewRequests = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequests).toHaveLength(1);
+        expect(reviewRequests[0].body.comments).toHaveLength(2);
+        expect(reviewRequests[0].body.body).toBe("Looks good overall.");
+
+        // Batch is claimed-then-posted; nothing should be left in the live queue.
+        const entries = await readdir(queueDir).catch(() => []);
+        expect(entries.some((e) => e === "comments")).toBe(false);
+        expect(entries.some((e) => e.startsWith("comments.posted-"))).toBe(
+          true,
+        );
+      },
     );
-    expect(reviewRequests).toHaveLength(1);
-    expect(reviewRequests[0].body.comments).toHaveLength(2);
-    expect(reviewRequests[0].body.body).toBe("Looks good overall.");
-
-    // Batch is claimed-then-posted; nothing should be left in the live queue.
-    const entries = await readdir(queueDir).catch(() => []);
-    expect(entries.some((e) => e === "comments")).toBe(false);
-    expect(entries.some((e) => e.startsWith("comments.posted-"))).toBe(true);
   });
 
   it("reusing file for second queue-inline-comment works", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -139,52 +140,55 @@ describe("pr-review CLI", () => {
         pattern: /\/pulls\/5\/reviews$/,
         body: { id: 111, html_url: "https://example/review/111" },
       },
-    ]);
 
-    const commentBody = await bodyFile("ONE");
-    await run([
-      "queue-inline-comment",
-      "--path",
-      "foo.js",
-      "--line",
-      "10",
-      "--body-file",
-      commentBody,
-    ]);
+      async ({ requests }) => {
+        const commentBody = await bodyFile("ONE");
+        await run([
+          "queue-inline-comment",
+          "--path",
+          "foo.js",
+          "--line",
+          "10",
+          "--body-file",
+          commentBody,
+        ]);
 
-    await writeFile(commentBody, "TWO");
-    await run([
-      "queue-inline-comment",
-      "--path",
-      "bar.js",
-      "--line",
-      "20",
-      "--body-file",
-      commentBody,
-    ]);
+        await writeFile(commentBody, "TWO");
+        await run([
+          "queue-inline-comment",
+          "--path",
+          "bar.js",
+          "--line",
+          "20",
+          "--body-file",
+          commentBody,
+        ]);
 
-    const { stdout } = await run(["comment-review"]);
-    expect(stdout).toMatch(/Submitted review with 2 inline comment/);
+        const { stdout } = await run(["comment-review"]);
+        expect(stdout).toMatch(/Submitted review with 2 inline comment/);
 
-    const reviewRequests = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
+        const reviewRequests = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequests).toHaveLength(1);
+        expect(reviewRequests[0].body.comments).toMatchObject([
+          { body: "ONE" },
+          { body: "TWO" },
+        ]);
+        expect(reviewRequests[0].body.body).toBe("");
+      },
     );
-    expect(reviewRequests).toHaveLength(1);
-    expect(reviewRequests[0].body.comments).toMatchObject([
-      { body: "ONE" },
-      { body: "TWO" },
-    ]);
-    expect(reviewRequests[0].body.body).toBe("");
   });
 
   it("comment-review with nothing queued and no body fails without calling the API", async () => {
-    mock = await startMockGitHub([]);
-    await expect(run(["comment-review"])).rejects.toThrow(/Nothing to submit/);
-    expect(mock.requests).toHaveLength(0);
+    await withMockGitHub(async ({ requests }) => {
+      await expect(run(["comment-review"])).rejects.toThrow(
+        /Nothing to submit/,
+      );
+      expect(requests).toHaveLength(0);
+    });
   });
 
   it("comment-review with only a body posts a comments-only review", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -195,52 +199,55 @@ describe("pr-review CLI", () => {
         pattern: /\/pulls\/5\/reviews$/,
         body: { id: 112, html_url: "https://example/review/112" },
       },
-    ]);
-    const topLevel = await bodyFile("Nothing to flag inline.");
-    await run(["comment-review", "--body-file", topLevel]);
 
-    const [reviewRequest] = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
+      async ({ requests }) => {
+        const topLevel = await bodyFile("Nothing to flag inline.");
+        await run(["comment-review", "--body-file", topLevel]);
+
+        const [reviewRequest] = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequest.body.comments).toEqual([]);
+        expect(reviewRequest.body.body).toBe("Nothing to flag inline.");
+      },
     );
-    expect(reviewRequest.body.comments).toEqual([]);
-    expect(reviewRequest.body.body).toBe("Nothing to flag inline.");
   });
 
   it("queue-inline-comment rejects startLine >= line", async () => {
-    mock = await startMockGitHub([]);
-    const body = await bodyFile("issue");
-    await expect(
-      run([
-        "queue-inline-comment",
-        "--path",
-        "foo.js",
-        "--line",
-        "10",
-        "--start-line",
-        "15",
-        "--body-file",
-        body,
-      ]),
-    ).rejects.toThrow(/start-line/);
+    await withMockGitHub(async () => {
+      await expect(
+        run([
+          "queue-inline-comment",
+          "--path",
+          "foo.js",
+          "--line",
+          "10",
+          "--start-line",
+          "15",
+          "--body-file",
+          await bodyFile("issue"),
+        ]),
+      ).rejects.toThrow(/start-line/);
+    });
   });
 
   it("reply-inline-comment posts immediately", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "POST",
         pattern: /\/pulls\/5\/comments\/123\/replies$/,
         body: { id: 234, html_url: "https://example/pulls/5/comments/234" },
       },
-    ]);
-    const body = await bodyFile("interesting reply");
-    const { stdout } = await run([
-      "reply-inline-comment",
-      "--comment-id",
-      "123",
-      "--body-file",
-      body,
-    ]);
-    expect(stdout).toMatch(/Posted reply/);
+
+      async () => {
+        const { stdout } = await run([
+          "reply-inline-comment",
+          "--comment-id",
+          "123",
+          "--body-file",
+          await bodyFile("interesting reply"),
+        ]);
+        expect(stdout).toMatch(/Posted reply/);
+      },
+    );
   });
 
   it.each([
@@ -252,20 +259,26 @@ describe("pr-review CLI", () => {
   ])(
     "reply-inline-comment rejects a malformed GITHUB_REPOSITORY (%s) without calling the API",
     async (repo) => {
-      mock = await startMockGitHub([]);
-      const body = await bodyFile("x");
-      await expect(
-        run(
-          ["reply-inline-comment", "--comment-id", "123", "--body-file", body],
-          { GITHUB_REPOSITORY: repo },
-        ),
-      ).rejects.toThrow(/owner\/repo form/);
-      expect(mock.requests).toHaveLength(0);
+      await withMockGitHub(async ({ requests }) => {
+        await expect(
+          run(
+            [
+              "reply-inline-comment",
+              "--comment-id",
+              "123",
+              "--body-file",
+              await bodyFile("x"),
+            ],
+            { GITHUB_REPOSITORY: repo },
+          ),
+        ).rejects.toThrow(/owner\/repo form/);
+        expect(requests).toHaveLength(0);
+      });
     },
   );
 
   it("approve-review posts an APPROVE event with no comments queued", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -276,18 +289,24 @@ describe("pr-review CLI", () => {
         pattern: /\/pulls\/5\/reviews$/,
         body: { id: 115, html_url: "https://example/review/115" },
       },
-    ]);
-    const { stdout } = await run(["approve-review"]);
-    expect(stdout).toMatch(/Submitted APPROVE review with 0 inline comment/);
 
-    const [reviewRequest] = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
+      async ({ requests }) => {
+        const { stdout } = await run(["approve-review"]);
+        expect(stdout).toMatch(
+          /Submitted APPROVE review with 0 inline comment/,
+        );
+
+        const [reviewRequest] = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequest.body).toMatchObject({
+          event: "APPROVE",
+          body: "",
+        });
+      },
     );
-    expect(reviewRequest.body).toMatchObject({ event: "APPROVE", body: "" });
   });
 
   it("approve-review accepts an optional body and includes queued inline comments", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -298,34 +317,36 @@ describe("pr-review CLI", () => {
         pattern: /\/pulls\/5\/reviews$/,
         body: { id: 116, html_url: "https://example/review/116" },
       },
-    ]);
-    const commentBody = await bodyFile("nice touch");
-    await run([
-      "queue-inline-comment",
-      "--path",
-      "foo.js",
-      "--line",
-      "10",
-      "--body-file",
-      commentBody,
-    ]);
 
-    const body = await bodyFile("Looks great.");
-    const { stdout } = await run(["approve-review", "--body-file", body]);
-    expect(stdout).toMatch(/Submitted APPROVE review with 1 inline comment/);
+      async ({ requests }) => {
+        await run([
+          "queue-inline-comment",
+          "--path",
+          "foo.js",
+          "--line",
+          "10",
+          "--body-file",
+          await bodyFile("nice touch"),
+        ]);
 
-    const [reviewRequest] = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
+        const body = await bodyFile("Looks great.");
+        const { stdout } = await run(["approve-review", "--body-file", body]);
+        expect(stdout).toMatch(
+          /Submitted APPROVE review with 1 inline comment/,
+        );
+
+        const [reviewRequest] = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequest.body).toMatchObject({
+          event: "APPROVE",
+          body: "Looks great.",
+        });
+        expect(reviewRequest.body.comments).toHaveLength(1);
+      },
     );
-    expect(reviewRequest.body).toMatchObject({
-      event: "APPROVE",
-      body: "Looks great.",
-    });
-    expect(reviewRequest.body.comments).toHaveLength(1);
   });
 
   it("approve-review falls back to a comment when GitHub rejects the approval", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -348,33 +369,37 @@ describe("pr-review CLI", () => {
           { body: { id: 118, html_url: "https://example/review/118" } },
         ],
       },
-    ]);
-    const body = await bodyFile("Looks great.");
-    const { stdout } = await run(["approve-review", "--body-file", body]);
-    expect(stdout).toMatch(/didn't allow approving.*submitted as a comment/s);
 
-    const reviewRequests = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
-    );
-    expect(reviewRequests).toHaveLength(2);
-    expect(reviewRequests[0].body.event).toBe("APPROVE");
-    expect(reviewRequests[1].body.event).toBe("COMMENT");
-    expect(reviewRequests[1].body.body).toContain("Looks great.");
-    expect(reviewRequests[1].body.body).toContain(
-      "submitted as a comment instead of an approval",
+      async ({ requests }) => {
+        const body = await bodyFile("Looks great.");
+        const { stdout } = await run(["approve-review", "--body-file", body]);
+        expect(stdout).toMatch(
+          /didn't allow approving.*submitted as a comment/s,
+        );
+
+        const reviewRequests = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequests).toHaveLength(2);
+        expect(reviewRequests[0].body.event).toBe("APPROVE");
+        expect(reviewRequests[1].body.event).toBe("COMMENT");
+        expect(reviewRequests[1].body.body).toContain("Looks great.");
+        expect(reviewRequests[1].body.body).toContain(
+          "submitted as a comment instead of an approval",
+        );
+      },
     );
   });
 
   it("request-changes-review requires --body-file", async () => {
-    mock = await startMockGitHub([]);
-    await expect(run(["request-changes-review"])).rejects.toThrow(
-      /--body-file is required/,
-    );
-    expect(mock.requests).toHaveLength(0);
+    await withMockGitHub(async ({ requests }) => {
+      await expect(run(["request-changes-review"])).rejects.toThrow(
+        /--body-file is required/,
+      );
+      expect(requests).toHaveLength(0);
+    });
   });
 
   it("request-changes-review posts a REQUEST_CHANGES event with queued inline comments", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -385,44 +410,44 @@ describe("pr-review CLI", () => {
         pattern: /\/pulls\/5\/reviews$/,
         body: { id: 117, html_url: "https://example/review/117" },
       },
-    ]);
-    const commentBody = await bodyFile("this is broken");
-    await run([
-      "queue-inline-comment",
-      "--path",
-      "foo.js",
-      "--line",
-      "10",
-      "--body-file",
-      commentBody,
-    ]);
 
-    const body = await bodyFile("Please address the security issue.");
-    const { stdout } = await run([
-      "request-changes-review",
-      "--body-file",
-      body,
-    ]);
-    expect(stdout).toMatch(
-      /Submitted REQUEST_CHANGES review with 1 inline comment/,
-    );
+      async ({ requests }) => {
+        await run([
+          "queue-inline-comment",
+          "--path",
+          "foo.js",
+          "--line",
+          "10",
+          "--body-file",
+          await bodyFile("this is broken"),
+        ]);
 
-    const [reviewRequest] = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
+        const { stdout } = await run([
+          "request-changes-review",
+          "--body-file",
+          await bodyFile("Please address the security issue."),
+        ]);
+        expect(stdout).toMatch(
+          /Submitted REQUEST_CHANGES review with 1 inline comment/,
+        );
+
+        const [reviewRequest] = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequest.body).toMatchObject({
+          event: "REQUEST_CHANGES",
+          body: "Please address the security issue.",
+        });
+        expect(reviewRequest.body.comments).toHaveLength(1);
+      },
     );
-    expect(reviewRequest.body).toMatchObject({
-      event: "REQUEST_CHANGES",
-      body: "Please address the security issue.",
-    });
-    expect(reviewRequest.body.comments).toHaveLength(1);
   });
 
   it("resolve-my-thread requires --thread-id", async () => {
-    mock = await startMockGitHub([]);
-    await expect(run(["resolve-my-thread"])).rejects.toThrow(
-      /--thread-id is required/,
-    );
-    expect(mock.requests).toHaveLength(0);
+    await withMockGitHub(async ({ requests }) => {
+      await expect(run(["resolve-my-thread"])).rejects.toThrow(
+        /--thread-id is required/,
+      );
+      expect(requests).toHaveLength(0);
+    });
   });
 
   // getThreadFirstCommentAuthor() and getViewerLogin() are both GraphQL
@@ -450,7 +475,7 @@ describe("pr-review CLI", () => {
   }
 
   it("resolve-my-thread resolves a thread it started", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       viewerRoute("claude[bot]"),
       threadFirstCommentAuthorRoute("claude[bot]"),
       {
@@ -461,72 +486,78 @@ describe("pr-review CLI", () => {
           data: { resolveReviewThread: { thread: { id: "thread1" } } },
         },
       },
-    ]);
-    const { stdout } = await run(
-      ["resolve-my-thread", "--thread-id", "thread1"],
-      {
-        GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
+
+      async ({ requests }) => {
+        const { stdout } = await run([
+          "resolve-my-thread",
+          "--thread-id",
+          "thread1",
+        ]);
+        expect(stdout).toMatch(/Resolved thread thread1/);
+
+        const graphqlRequests = filterByUrlEnd(requests, "/graphql");
+        expect(graphqlRequests).toHaveLength(3);
+        expect(
+          graphqlRequests.find((r) => /resolveReviewThread/.test(r.body.query))
+            .body.variables,
+        ).toEqual({ threadId: "thread1" });
       },
     );
-    expect(stdout).toMatch(/Resolved thread thread1/);
-
-    const graphqlRequests = mock.requests.filter((r) =>
-      r.url.endsWith("/graphql"),
-    );
-    expect(graphqlRequests).toHaveLength(3);
-    expect(
-      graphqlRequests.find((r) => /resolveReviewThread/.test(r.body.query)).body
-        .variables,
-    ).toEqual({ threadId: "thread1" });
   });
 
   it("resolve-my-thread refuses to resolve a thread it didn't start", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       viewerRoute("claude[bot]"),
       threadFirstCommentAuthorRoute("someone-else"),
-    ]);
-    await expect(
-      run(["resolve-my-thread", "--thread-id", "thread1"], {
-        GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
-      }),
-    ).rejects.toThrow(/authored by someone-else.*resolve-any-thread/s);
 
-    const graphqlRequests = mock.requests.filter((r) =>
-      r.url.endsWith("/graphql"),
+      async ({ requests }) => {
+        await expect(
+          run(["resolve-my-thread", "--thread-id", "thread1"]),
+        ).rejects.toThrow(/authored by someone-else.*resolve-any-thread/s);
+
+        const graphqlRequests = filterByUrlEnd(requests, "/graphql");
+        expect(graphqlRequests).toHaveLength(2);
+        expect(
+          graphqlRequests.some((r) => /resolveReviewThread/.test(r.body.query)),
+        ).toBe(false);
+      },
     );
-    expect(graphqlRequests).toHaveLength(2);
-    expect(
-      graphqlRequests.some((r) => /resolveReviewThread/.test(r.body.query)),
-    ).toBe(false);
   });
 
   it("resolve-any-thread resolves a thread it didn't start", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "POST",
         pattern: /\/graphql$/,
-        body: { data: { resolveReviewThread: { thread: { id: "thread1" } } } },
+        body: {
+          data: { resolveReviewThread: { thread: { id: "thread1" } } },
+        },
       },
-    ]);
-    const { stdout } = await run(
-      ["resolve-any-thread", "--thread-id", "thread1"],
-      { GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql` },
+
+      async ({ requests }) => {
+        const { stdout } = await run([
+          "resolve-any-thread",
+          "--thread-id",
+          "thread1",
+        ]);
+        expect(stdout).toMatch(/Resolved thread thread1/);
+        expect(requests).toHaveLength(1);
+        expect(requests[0].body.variables).toEqual({ threadId: "thread1" });
+      },
     );
-    expect(stdout).toMatch(/Resolved thread thread1/);
-    expect(mock.requests).toHaveLength(1);
-    expect(mock.requests[0].body.variables).toEqual({ threadId: "thread1" });
   });
 
   it("hide-my-review requires --review-id", async () => {
-    mock = await startMockGitHub([]);
-    await expect(run(["hide-my-review"])).rejects.toThrow(
-      /--review-id is required/,
-    );
-    expect(mock.requests).toHaveLength(0);
+    await withMockGitHub(async ({ requests }) => {
+      await expect(run(["hide-my-review"])).rejects.toThrow(
+        /--review-id is required/,
+      );
+      expect(requests).toHaveLength(0);
+    });
   });
 
   it("hide-my-review minimizes its own review as outdated", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5\/reviews\/111$/,
@@ -543,46 +574,46 @@ describe("pr-review CLI", () => {
           },
         },
       },
-    ]);
-    const { stdout } = await run(["hide-my-review", "--review-id", "111"], {
-      GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
-    });
-    expect(stdout).toMatch(/Hid review 111 as outdated/);
 
-    const graphqlRequest = mock.requests.find((r) =>
-      /minimizeComment/.test(r.body?.query),
+      async ({ requests }) => {
+        const { stdout } = await run(["hide-my-review", "--review-id", "111"]);
+        expect(stdout).toMatch(/Hid review 111 as outdated/);
+
+        const graphqlRequest = requests.find((r) =>
+          /minimizeComment/.test(r.body?.query),
+        );
+        expect(graphqlRequest.body.variables).toEqual({
+          subjectId: "review-node-1",
+        });
+      },
     );
-    expect(graphqlRequest.body.variables).toEqual({
-      subjectId: "review-node-1",
-    });
   });
 
   it("hide-my-review refuses to hide someone else's review", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5\/reviews\/111$/,
         body: { node_id: "review-node-1", user: { login: "someone-else" } },
       },
       viewerRoute("claude[bot]"),
-    ]);
-    await expect(
-      run(["hide-my-review", "--review-id", "111"], {
-        GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
-      }),
-    ).rejects.toThrow(/authored by someone-else.*hide-any-review/s);
 
-    const graphqlRequests = mock.requests.filter((r) =>
-      r.url.endsWith("/graphql"),
+      async ({ requests }) => {
+        await expect(
+          run(["hide-my-review", "--review-id", "111"]),
+        ).rejects.toThrow(/authored by someone-else.*hide-any-review/s);
+
+        const graphqlRequests = filterByUrlEnd(requests, "/graphql");
+        expect(graphqlRequests).toHaveLength(1);
+        expect(
+          graphqlRequests.some((r) => /minimizeComment/.test(r.body.query)),
+        ).toBe(false);
+      },
     );
-    expect(graphqlRequests).toHaveLength(1);
-    expect(
-      graphqlRequests.some((r) => /minimizeComment/.test(r.body.query)),
-    ).toBe(false);
   });
 
   it("hide-any-review minimizes someone else's review as outdated", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5\/reviews\/111$/,
@@ -597,18 +628,17 @@ describe("pr-review CLI", () => {
           },
         },
       },
-    ]);
-    const { stdout } = await run(["hide-any-review", "--review-id", "111"], {
-      GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
-    });
-    expect(stdout).toMatch(/Hid review 111 as outdated/);
-    expect(
-      mock.requests.filter((r) => r.url.endsWith("/graphql")),
-    ).toHaveLength(1);
+
+      async ({ requests }) => {
+        const { stdout } = await run(["hide-any-review", "--review-id", "111"]);
+        expect(stdout).toMatch(/Hid review 111 as outdated/);
+        expect(filterByUrlEnd(requests, "/graphql")).toHaveLength(1);
+      },
+    );
   });
 
   it("sweep posts a batch Claude queued but never submitted", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -619,30 +649,30 @@ describe("pr-review CLI", () => {
         pattern: /\/pulls\/5\/reviews$/,
         body: { id: 113, html_url: "https://example/review/113" },
       },
-    ]);
-    const body = await bodyFile("forgotten issue");
-    await run([
-      "queue-inline-comment",
-      "--path",
-      "foo.js",
-      "--line",
-      "1",
-      "--body-file",
-      body,
-    ]);
 
-    const { stdout } = await run(["sweep"]);
-    expect(stdout).toMatch(/Swept 1 pending submission/);
+      async ({ requests }) => {
+        await run([
+          "queue-inline-comment",
+          "--path",
+          "foo.js",
+          "--line",
+          "1",
+          "--body-file",
+          await bodyFile("forgotten issue"),
+        ]);
 
-    const reviewRequests = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
+        const { stdout } = await run(["sweep"]);
+        expect(stdout).toMatch(/Swept 1 pending submission/);
+
+        const reviewRequests = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequests).toHaveLength(1);
+        expect(reviewRequests[0].body.comments).toHaveLength(1);
+      },
     );
-    expect(reviewRequests).toHaveLength(1);
-    expect(reviewRequests[0].body.comments).toHaveLength(1);
   });
 
   it("sweep retries an abandoned claimed batch left by a crashed comment-review", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -653,51 +683,50 @@ describe("pr-review CLI", () => {
         pattern: /\/pulls\/5\/reviews$/,
         body: { id: 114, html_url: "https://example/review/114" },
       },
-    ]);
 
-    // Simulate a submit that claimed the batch (the rename that normally
-    // happens inside `claim()`) and then crashed before the POST -- exactly
-    // the state a real crash would leave behind, without needing to
-    // actually kill a process mid-request.
-    const claimedDir = path.join(queueDir, "comments.claimed-1-999-123abc");
-    await mkdir(claimedDir, { recursive: true });
-    await writeFile(
-      path.join(claimedDir, "1-abc.json"),
-      JSON.stringify({
-        path: "foo.js",
-        body: "crashed before posting",
-        side: "RIGHT",
-        line: 1,
-      }),
+      async ({ requests }) => {
+        // Simulate a submit that claimed the batch (the rename that normally
+        // happens inside `claim()`) and then crashed before the POST -- exactly
+        // the state a real crash would leave behind, without needing to
+        // actually kill a process mid-request.
+        const claimedDir = path.join(queueDir, "comments.claimed-1-999-123abc");
+        await mkdir(claimedDir, { recursive: true });
+        await writeFile(
+          path.join(claimedDir, "1-abc.json"),
+          JSON.stringify({
+            path: "foo.js",
+            body: "crashed before posting",
+            side: "RIGHT",
+            line: 1,
+          }),
+        );
+
+        const { stdout } = await run(["sweep"]);
+        expect(stdout).toMatch(/Swept 1 pending submission/);
+
+        const reviewRequests = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequests).toHaveLength(1);
+        expect(reviewRequests[0].body.comments).toHaveLength(1);
+
+        // Running sweep again should find nothing left to retry.
+        const second = await run(["sweep"]);
+        expect(second.stdout).toMatch(/Nothing to sweep/);
+        expect(filterByUrlEnd(requests, "/reviews")).toHaveLength(1);
+        await expect(access(queueDir)).rejects.toThrow("ENOENT");
+      },
     );
-
-    const { stdout } = await run(["sweep"]);
-    expect(stdout).toMatch(/Swept 1 pending submission/);
-
-    const reviewRequests = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
-    );
-    expect(reviewRequests).toHaveLength(1);
-    expect(reviewRequests[0].body.comments).toHaveLength(1);
-
-    // Running sweep again should find nothing left to retry.
-    const second = await run(["sweep"]);
-    expect(second.stdout).toMatch(/Nothing to sweep/);
-    expect(
-      mock.requests.filter((r) => r.url.endsWith("/reviews")),
-    ).toHaveLength(1);
-    await expect(access(queueDir)).rejects.toThrow("ENOENT");
   });
 
   it("sweep is a no-op when there's nothing queued", async () => {
-    mock = await startMockGitHub([]);
-    const { stdout } = await run(["sweep"]);
-    expect(stdout).toMatch(/Nothing to sweep/);
-    expect(mock.requests).toHaveLength(0);
+    await withMockGitHub(async ({ requests }) => {
+      const { stdout } = await run(["sweep"]);
+      expect(stdout).toMatch(/Nothing to sweep/);
+      expect(requests).toHaveLength(0);
+    });
   });
 
   it("sweep retries an abandoned APPROVE batch with the recorded event", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -708,29 +737,32 @@ describe("pr-review CLI", () => {
         pattern: /\/pulls\/5\/reviews$/,
         body: { id: 119, html_url: "https://example/review/119" },
       },
-    ]);
 
-    // Simulate a crashed approve-review: claimed, event recorded, but the
-    // POST never happened.
-    const claimedDir = path.join(queueDir, "comments.claimed-1-999-approve");
-    await mkdir(claimedDir, { recursive: true });
-    await writeFile(path.join(claimedDir, "_event.txt"), "APPROVE");
-    await writeFile(path.join(claimedDir, "_body.txt"), "ship it");
+      async ({ requests }) => {
+        // Simulate a crashed approve-review: claimed, event recorded, but the
+        // POST never happened.
+        const claimedDir = path.join(
+          queueDir,
+          "comments.claimed-1-999-approve",
+        );
+        await mkdir(claimedDir, { recursive: true });
+        await writeFile(path.join(claimedDir, "_event.txt"), "APPROVE");
+        await writeFile(path.join(claimedDir, "_body.txt"), "ship it");
 
-    const { stdout } = await run(["sweep"]);
-    expect(stdout).toMatch(/Swept 1 pending submission/);
+        const { stdout } = await run(["sweep"]);
+        expect(stdout).toMatch(/Swept 1 pending submission/);
 
-    const [reviewRequest] = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
+        const [reviewRequest] = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequest.body).toMatchObject({
+          event: "APPROVE",
+          body: "ship it",
+        });
+      },
     );
-    expect(reviewRequest.body).toMatchObject({
-      event: "APPROVE",
-      body: "ship it",
-    });
   });
 
   it("sweep --downgrade-approval forces a queued APPROVE to a COMMENT", async () => {
-    mock = await startMockGitHub([
+    await withMockGitHub(
       {
         method: "GET",
         pattern: /\/pulls\/5$/,
@@ -741,21 +773,24 @@ describe("pr-review CLI", () => {
         pattern: /\/pulls\/5\/reviews$/,
         body: { id: 120, html_url: "https://example/review/120" },
       },
-    ]);
 
-    const claimedDir = path.join(queueDir, "comments.claimed-1-999-approve2");
-    await mkdir(claimedDir, { recursive: true });
-    await writeFile(path.join(claimedDir, "_event.txt"), "APPROVE");
-    await writeFile(path.join(claimedDir, "_body.txt"), "ship it");
+      async ({ requests }) => {
+        const claimedDir = path.join(
+          queueDir,
+          "comments.claimed-1-999-approve2",
+        );
+        await mkdir(claimedDir, { recursive: true });
+        await writeFile(path.join(claimedDir, "_event.txt"), "APPROVE");
+        await writeFile(path.join(claimedDir, "_body.txt"), "ship it");
 
-    const { stdout } = await run(["sweep", "--downgrade-approval"]);
-    expect(stdout).toMatch(/Swept 1 pending submission/);
+        const { stdout } = await run(["sweep", "--downgrade-approval"]);
+        expect(stdout).toMatch(/Swept 1 pending submission/);
 
-    const [reviewRequest] = mock.requests.filter((r) =>
-      r.url.endsWith("/reviews"),
+        const [reviewRequest] = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequest.body.event).toBe("COMMENT");
+        expect(reviewRequest.body.body).toContain("ship it");
+        expect(reviewRequest.body.body).toContain("didn't complete cleanly");
+      },
     );
-    expect(reviewRequest.body.event).toBe("COMMENT");
-    expect(reviewRequest.body.body).toContain("ship it");
-    expect(reviewRequest.body.body).toContain("didn't complete cleanly");
   });
 });
