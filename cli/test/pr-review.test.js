@@ -17,7 +17,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { withMockGitHub, filterByUrlEnd } from "./support/mock-github.js";
+import {
+  withMockGitHub,
+  filterByUrlEnd,
+  route,
+  responses,
+} from "./support/mock-github.js";
 
 const execFileAsync = promisify(execFile);
 const CLI_PATH = fileURLToPath(new URL("../pr-review", import.meta.url));
@@ -75,16 +80,8 @@ describe("pr-review CLI", () => {
 
   it("queue-inline-comment + queue-inline-comment + comment-review posts one grouped review", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 111, html_url: "https://example/review/111" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 111),
 
       async ({ requests }) => {
         await run([
@@ -130,16 +127,8 @@ describe("pr-review CLI", () => {
 
   it("reusing file for second queue-inline-comment works", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 111, html_url: "https://example/review/111" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 111),
 
       async ({ requests }) => {
         const commentBody = await bodyFile("ONE");
@@ -189,16 +178,8 @@ describe("pr-review CLI", () => {
 
   it("comment-review with only a body posts a comments-only review", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 112, html_url: "https://example/review/112" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 112),
 
       async ({ requests }) => {
         const topLevel = await bodyFile("Nothing to flag inline.");
@@ -231,11 +212,7 @@ describe("pr-review CLI", () => {
 
   it("reply-inline-comment posts immediately", async () => {
     await withMockGitHub(
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/comments\/123\/replies$/,
-        body: { id: 234, html_url: "https://example/pulls/5/comments/234" },
-      },
+      responses.POST_pull_comment_reply(5, 123, 234),
 
       async () => {
         const { stdout } = await run([
@@ -279,16 +256,8 @@ describe("pr-review CLI", () => {
 
   it("approve-review posts an APPROVE event with no comments queued", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 115, html_url: "https://example/review/115" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 115),
 
       async ({ requests }) => {
         const { stdout } = await run(["approve-review"]);
@@ -307,16 +276,8 @@ describe("pr-review CLI", () => {
 
   it("approve-review accepts an optional body and includes queued inline comments", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 116, html_url: "https://example/review/116" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 116),
 
       async ({ requests }) => {
         await run([
@@ -347,28 +308,22 @@ describe("pr-review CLI", () => {
 
   it("approve-review falls back to a comment when GitHub rejects the approval", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        responses: [
-          {
-            status: 422,
-            body: {
-              message: "Unprocessable Entity",
-              errors: [
-                "GitHub Actions is not permitted to approve pull requests.",
-              ],
-              status: "422",
-            },
+      responses.GET_pull(5, "deadbeef"),
+      route(
+        "POST",
+        "/pulls/5/reviews$",
+        {
+          status: 422,
+          body: {
+            message: "Unprocessable Entity",
+            errors: [
+              "GitHub Actions is not permitted to approve pull requests.",
+            ],
+            status: "422",
           },
-          { body: { id: 118, html_url: "https://example/review/118" } },
-        ],
-      },
+        },
+        { body: { id: 118, html_url: "https://example/review/118" } },
+      ),
 
       async ({ requests }) => {
         const body = await bodyFile("Looks great.");
@@ -400,16 +355,8 @@ describe("pr-review CLI", () => {
 
   it("request-changes-review posts a REQUEST_CHANGES event with queued inline comments", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 117, html_url: "https://example/review/117" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 117),
 
       async ({ requests }) => {
         await run([
@@ -455,37 +402,31 @@ describe("pr-review CLI", () => {
   // told apart by query content (via `match`) rather than call order, since
   // which one the mock server sees first isn't guaranteed.
   function viewerRoute(login) {
-    return {
-      method: "POST",
-      pattern: /\/graphql$/,
-      match: (body) => /viewer/.test(body.query),
+    return responses.graphql((body) => /viewer/.test(body.query), {
       body: { data: { viewer: { login } } },
-    };
+    });
   }
 
   function threadFirstCommentAuthorRoute(login) {
-    return {
-      method: "POST",
-      pattern: /\/graphql$/,
-      match: (body) => /PullRequestReviewThread/.test(body.query),
-      body: {
-        data: { node: { comments: { nodes: [{ author: { login } }] } } },
+    return responses.graphql(
+      (body) => /PullRequestReviewThread/.test(body.query),
+      {
+        body: {
+          data: { node: { comments: { nodes: [{ author: { login } }] } } },
+        },
       },
-    };
+    );
   }
 
   it("resolve-my-thread resolves a thread it started", async () => {
     await withMockGitHub(
       viewerRoute("claude[bot]"),
       threadFirstCommentAuthorRoute("claude[bot]"),
-      {
-        method: "POST",
-        pattern: /\/graphql$/,
-        match: (body) => /resolveReviewThread/.test(body.query),
+      responses.graphql((body) => /resolveReviewThread/.test(body.query), {
         body: {
           data: { resolveReviewThread: { thread: { id: "thread1" } } },
         },
-      },
+      }),
 
       async ({ requests }) => {
         const { stdout } = await run([
@@ -526,13 +467,11 @@ describe("pr-review CLI", () => {
 
   it("resolve-any-thread resolves a thread it didn't start", async () => {
     await withMockGitHub(
-      {
-        method: "POST",
-        pattern: /\/graphql$/,
+      responses.graphql({
         body: {
           data: { resolveReviewThread: { thread: { id: "thread1" } } },
         },
-      },
+      }),
 
       async ({ requests }) => {
         const { stdout } = await run([
@@ -558,22 +497,15 @@ describe("pr-review CLI", () => {
 
   it("hide-my-review minimizes its own review as outdated", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5\/reviews\/111$/,
-        body: { node_id: "review-node-1", user: { login: "claude[bot]" } },
-      },
+      responses.GET_pull_review(5, 111, "review-node-1", "claude[bot]"),
       viewerRoute("claude[bot]"),
-      {
-        method: "POST",
-        pattern: /\/graphql$/,
-        match: (body) => /minimizeComment/.test(body.query),
+      responses.graphql((body) => /minimizeComment/.test(body.query), {
         body: {
           data: {
             minimizeComment: { minimizedComment: { isMinimized: true } },
           },
         },
-      },
+      }),
 
       async ({ requests }) => {
         const { stdout } = await run(["hide-my-review", "--review-id", "111"]);
@@ -591,11 +523,7 @@ describe("pr-review CLI", () => {
 
   it("hide-my-review refuses to hide someone else's review", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5\/reviews\/111$/,
-        body: { node_id: "review-node-1", user: { login: "someone-else" } },
-      },
+      responses.GET_pull_review(5, 111, "review-node-1", "someone-else"),
       viewerRoute("claude[bot]"),
 
       async ({ requests }) => {
@@ -614,20 +542,14 @@ describe("pr-review CLI", () => {
 
   it("hide-any-review minimizes someone else's review as outdated", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5\/reviews\/111$/,
-        body: { node_id: "review-node-1", user: { login: "someone-else" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/graphql$/,
+      responses.GET_pull_review(5, 111, "review-node-1", "someone-else"),
+      responses.graphql({
         body: {
           data: {
             minimizeComment: { minimizedComment: { isMinimized: true } },
           },
         },
-      },
+      }),
 
       async ({ requests }) => {
         const { stdout } = await run(["hide-any-review", "--review-id", "111"]);
@@ -639,16 +561,8 @@ describe("pr-review CLI", () => {
 
   it("sweep posts a batch Claude queued but never submitted", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 113, html_url: "https://example/review/113" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 113),
 
       async ({ requests }) => {
         await run([
@@ -673,16 +587,8 @@ describe("pr-review CLI", () => {
 
   it("sweep retries an abandoned claimed batch left by a crashed comment-review", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 114, html_url: "https://example/review/114" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 114),
 
       async ({ requests }) => {
         // Simulate a submit that claimed the batch (the rename that normally
@@ -727,16 +633,8 @@ describe("pr-review CLI", () => {
 
   it("sweep retries an abandoned APPROVE batch with the recorded event", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 119, html_url: "https://example/review/119" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 119),
 
       async ({ requests }) => {
         // Simulate a crashed approve-review: claimed, event recorded, but the
@@ -763,16 +661,8 @@ describe("pr-review CLI", () => {
 
   it("sweep --downgrade-approval forces a queued APPROVE to a COMMENT", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 120, html_url: "https://example/review/120" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 120),
 
       async ({ requests }) => {
         const claimedDir = path.join(

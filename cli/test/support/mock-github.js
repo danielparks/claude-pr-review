@@ -1,8 +1,13 @@
 import { createServer } from "node:http";
 
+/**
+ * Run func with a mock GitHub.
+ *
+ * This takes routes as arguments, followed by the function to run.
+ */
 export async function withMockGitHub(...routes /*, func*/) {
   const func = routes.pop();
-  const old_env = {
+  const oldEnv = {
     GITHUB_API_URL: process.env.GITHUB_API_URL,
     GITHUB_GRAPHQL_URL: process.env.GITHUB_GRAPHQL_URL,
   };
@@ -14,11 +19,11 @@ export async function withMockGitHub(...routes /*, func*/) {
     return await func(mock);
   } finally {
     await mock?.close();
-    for (const name in old_env) {
-      if (old_env[name] === undefined) {
-        delete process[name];
+    for (const name in oldEnv) {
+      if (oldEnv[name] === undefined) {
+        delete process.env[name];
       } else {
-        process[name] = old_env[name];
+        process.env[name] = oldEnv[name];
       }
     }
   }
@@ -45,26 +50,21 @@ export function startMockGitHub(routes) {
           (!r.match || r.match(body)),
       );
       res.setHeader("Content-Type", "application/json");
-      if (!route) {
+      if (!route || !route.responses?.length) {
+        const missing = route ? "responses" : "route";
         res.statusCode = 404;
-        res.end(JSON.stringify({ message: `no mock route for ${url}` }));
+        res.end(JSON.stringify({ message: `no mock ${missing} for ${url}` }));
         return;
       }
 
       // `responses` lets a route return a different reply each time it's
       // matched (e.g. reject the first attempt, succeed on a retry) --
       // the last entry repeats once the list is exhausted.
-      if (route.responses) {
-        const i = Math.min(route._calls ?? 0, route.responses.length - 1);
-        route._calls = (route._calls ?? 0) + 1;
-        const response = route.responses[i];
-        res.statusCode = response.status ?? 200;
-        res.end(JSON.stringify(response.body));
-        return;
-      }
-
-      res.statusCode = route.status ?? 200;
-      res.end(JSON.stringify(route.body));
+      const i = Math.min(route._calls ?? 0, route.responses.length - 1);
+      route._calls = (route._calls ?? 0) + 1;
+      const response = route.responses[i];
+      res.statusCode = response.status ?? 200;
+      res.end(JSON.stringify(response.body));
     });
   });
 
@@ -85,3 +85,40 @@ export function startMockGitHub(routes) {
 export function filterByUrlEnd(requests, suffix) {
   return requests.filter((r) => r.url.endsWith(suffix));
 }
+
+/**
+ * Produce a route for the mock GitHub.
+ *
+ * If maybeMatch is a function, it will be used to match the request body.
+ * Otherwise, it will be prepended to the responses.
+ */
+export function route(method, pattern, maybeMatch, ...responses) {
+  let match;
+  if (typeof maybeMatch === "function") {
+    match = maybeMatch;
+  } else if (maybeMatch) {
+    responses.unshift(maybeMatch);
+  }
+  return { method, pattern: new RegExp(pattern), match, responses };
+}
+
+export const responses = {
+  graphql: (...args) => route("POST", "/graphql$", ...args),
+  GET_pull: (pr, sha) =>
+    route("GET", `/pulls/${pr}$`, { body: { head: { sha } } }),
+  POST_review: (pr, new_id) =>
+    route("POST", `/pulls/${pr}/reviews$`, {
+      body: { id: new_id, html_url: `https://example/review/${new_id}` },
+    }),
+  GET_pull_review: (pr, review_id, node_id, login) =>
+    route("GET", `/pulls/${pr}/reviews/${review_id}$`, {
+      body: { node_id, user: { login } },
+    }),
+  POST_pull_comment_reply: (pr, comment_id, new_id) =>
+    route("POST", `/pulls/${pr}/comments/${comment_id}/replies$`, {
+      body: {
+        id: new_id,
+        html_url: `https://example/pulls/${pr}/comments/${new_id}`,
+      },
+    }),
+};
