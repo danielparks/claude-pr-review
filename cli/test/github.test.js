@@ -11,18 +11,19 @@ import {
   minimizeReview,
   resolveReviewThread,
 } from "../lib/github.js";
-import { withMockGitHub, filterByUrlEnd } from "./support/mock-github.js";
+import {
+  withMockGitHub,
+  filterByUrlEnd,
+  match,
+  responses,
+} from "./support/mock-github.js";
 
 const TOKEN_ORG_REPO = ["test", "acme", "widgets"];
 
 describe("github", () => {
   it("getHeadSha() fetches the PR's head commit sha", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
+      responses.GET_pull(5, "deadbeef"),
 
       async () => {
         expect(await getHeadSha(...TOKEN_ORG_REPO, 5)).toBe("deadbeef");
@@ -32,16 +33,8 @@ describe("github", () => {
 
   it("createReview() posts commit_id/body/event/comments and returns id/html_url", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 111, html_url: "https://example/review/111" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 111),
 
       async ({ requests }) => {
         const comments = [
@@ -66,16 +59,8 @@ describe("github", () => {
 
   it("createReview() defaults to a COMMENT event but accepts an override", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
-        body: { id: 115, html_url: "https://example/review/115" },
-      },
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 115),
 
       async ({ requests }) => {
         await createReview(...TOKEN_ORG_REPO, 5, [], "go", "APPROVE");
@@ -92,13 +77,11 @@ describe("github", () => {
 
   it("resolveReviewThread() posts the mutation with the given thread id", async () => {
     await withMockGitHub(
-      {
-        method: "POST",
-        pattern: /\/graphql$/,
+      responses.graphql({
         body: {
           data: { resolveReviewThread: { thread: { id: "thread1" } } },
         },
-      },
+      }),
 
       async ({ requests }) => {
         await resolveReviewThread("test", "thread1");
@@ -111,11 +94,9 @@ describe("github", () => {
 
   it("resolveReviewThread() throws on a GraphQL errors response", async () => {
     await withMockGitHub(
-      {
-        method: "POST",
-        pattern: /\/graphql$/,
+      responses.graphql({
         body: { errors: [{ message: "Could not resolve to a node." }] },
-      },
+      }),
 
       async () => {
         await expect(resolveReviewThread("test", "bad-id")).rejects.toSatisfy(
@@ -130,11 +111,7 @@ describe("github", () => {
 
   it("getReview() fetches a review by id", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5\/reviews\/111$/,
-        body: { node_id: "review-node-1", user: { login: "claude[bot]" } },
-      },
+      responses.GET_pull_review(5, 111, "review-node-1", "claude[bot]"),
 
       async () => {
         expect(await getReview(...TOKEN_ORG_REPO, 5, 111)).toEqual({
@@ -147,15 +124,13 @@ describe("github", () => {
 
   it("minimizeReview() posts the mutation with the given node id", async () => {
     await withMockGitHub(
-      {
-        method: "POST",
-        pattern: /\/graphql$/,
+      responses.graphql({
         body: {
           data: {
             minimizeComment: { minimizedComment: { isMinimized: true } },
           },
         },
-      },
+      }),
 
       async ({ requests }) => {
         await minimizeReview("test", "review-node-1");
@@ -172,11 +147,9 @@ describe("github", () => {
 
   it("getViewerLogin() fetches the authenticated user's login via GraphQL viewer", async () => {
     await withMockGitHub(
-      {
-        method: "POST",
-        pattern: /\/graphql$/,
+      responses.graphql({
         body: { data: { viewer: { login: "claude[bot]" } } },
-      },
+      }),
 
       async ({ requests }) => {
         expect(await getViewerLogin("test")).toBe("claude[bot]");
@@ -187,9 +160,7 @@ describe("github", () => {
 
   it("getThreadFirstCommentAuthor() returns the first comment's author login, not a later one", async () => {
     await withMockGitHub(
-      {
-        method: "POST",
-        pattern: /\/graphql$/,
+      responses.graphql({
         body: {
           data: {
             node: {
@@ -202,7 +173,7 @@ describe("github", () => {
             },
           },
         },
-      },
+      }),
 
       async ({ requests }) => {
         expect(await getThreadFirstCommentAuthor("test", "thread1")).toBe(
@@ -216,11 +187,9 @@ describe("github", () => {
 
   it("getThreadFirstCommentAuthor() returns null when the thread has no comments", async () => {
     await withMockGitHub(
-      {
-        method: "POST",
-        pattern: /\/graphql$/,
+      responses.graphql({
         body: { data: { node: { comments: { nodes: [] } } } },
-      },
+      }),
 
       async () => {
         expect(await getThreadFirstCommentAuthor("test", "thread1")).toBeNull();
@@ -230,18 +199,14 @@ describe("github", () => {
 
   it("createReply() posts to the comment's replies endpoint", async () => {
     await withMockGitHub(
-      {
-        method: "POST",
-        pattern: /\/comments\/999\/replies$/,
-        body: { id: 222, html_url: "https://example/comment/222" },
-      },
+      responses.POST_pull_comment_reply(5, 999, 222),
 
       async ({ requests }) => {
         expect(
           await createReply(...TOKEN_ORG_REPO, 5, 999, "thanks, fixed"),
         ).toEqual({
           id: 222,
-          html_url: "https://example/comment/222",
+          html_url: "https://example/pulls/5/comments/222",
         });
         expect(requests[0].body).toEqual({ body: "thanks, fixed" });
       },
@@ -250,12 +215,10 @@ describe("github", () => {
 
   it("apiErrorHint() adds a hint for a 404 from a failed request", async () => {
     await withMockGitHub(
-      {
-        method: "POST",
-        pattern: /\/comments\/999\/replies$/,
+      match("POST", "/pulls/5/comments/999/replies$", {
         status: 404,
         body: { message: "Not Found" },
-      },
+      }),
 
       async () => {
         await expect(
@@ -285,17 +248,11 @@ describe("github", () => {
 
   it("isApprovalRejected() recognizes GitHub's actual not-permitted-to-approve response", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
+      responses.GET_pull(5, "deadbeef"),
+      match("POST", "/pulls/5/reviews$", {
         status: 422,
         body: APPROVAL_REJECTED_BODY,
-      },
+      }),
 
       async () => {
         await expect(
@@ -311,20 +268,14 @@ describe("github", () => {
 
   it("isApprovalRejected() is false for an unrelated 422", async () => {
     await withMockGitHub(
-      {
-        method: "GET",
-        pattern: /\/pulls\/5$/,
-        body: { head: { sha: "deadbeef" } },
-      },
-      {
-        method: "POST",
-        pattern: /\/pulls\/5\/reviews$/,
+      responses.GET_pull(5, "deadbeef"),
+      match("POST", "/pulls/5/reviews$", {
         status: 422,
         body: {
           message: "Validation Failed",
           errors: [{ field: "line", code: "invalid" }],
         },
-      },
+      }),
 
       async () => {
         await expect(
