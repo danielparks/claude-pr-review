@@ -8,8 +8,9 @@
 // transport spawns servers with a fixed safe env allowlist, not the parent's
 // real environment. See ./README.md for more information.
 
-import { parseArgs } from "node:util";
 import { readFile } from "node:fs/promises";
+import { getOptions, oneOf, positiveInt, required } from "./lib/args.js";
+import { fail } from "./lib/util.js";
 import {
   claim,
   cleanup,
@@ -33,12 +34,6 @@ import {
   resolveReviewThread,
 } from "./lib/github.js";
 import redact from "./lib/redact.js";
-
-class CliError extends Error {}
-
-function fail(message) {
-  throw new CliError(message);
-}
 
 /**
  * Wrapper to fail correctly when a (likely) API error is raised.
@@ -78,23 +73,14 @@ function prNumberFromEnv() {
   return positiveInt(process.env.PR_NUMBER, "PR_NUMBER environment variable");
 }
 
-function positiveInt(value, label) {
-  const n = Number(value);
-  if (!Number.isInteger(n) || n < 1) {
-    fail(`${label} must be a positive integer, got: ${value}`);
-  }
-  return n;
-}
-
-async function readBodyFile(path, { required }) {
-  if (!path) {
-    if (required) fail("--body-file is required");
-    return "";
-  }
+/** Read a comment body file (pass to map for getOptions). */
+async function readBodyFile(path, long, info) {
+  if (info.required) required(path, long);
+  if (!path) return "";
 
   const body = redact(await readFile(path, "utf8"));
-  if (required && !body.trim()) {
-    fail(`--body-file (${path}) is empty`);
+  if (info.required && !body.trim()) {
+    fail(`${long} (${path}) is empty`);
   }
   return body;
 }
@@ -122,33 +108,20 @@ async function cmdInit() {
 }
 
 async function cmdQueueInlineComment(args) {
-  const { values } = parseArgs({
-    args,
-    options: {
-      path: { type: "string" },
-      line: { type: "string" },
-      "start-line": { type: "string" },
-      side: { type: "string" },
-      "body-file": { type: "string" },
-    },
+  const [{ path, line, startLine, side, body }] = await getOptions(args, {
+    path: { map: required },
+    line: { map: positiveInt },
+    startLine: { long: "start-line" },
+    side: { map: oneOf("LEFT", "RIGHT"), default: "RIGHT" },
+    body: { long: "body-file", map: readBodyFile, required: true },
   });
-  if (!values.path) fail("--path is required");
-  if (!values.line) fail("--line is required");
 
-  const line = positiveInt(values.line, "--line");
-  const side = values.side ?? "RIGHT";
-  if (side !== "LEFT" && side !== "RIGHT") {
-    fail(`--side must be LEFT or RIGHT, got: ${values.side}`);
-  }
-  const body = await readBodyFile(values["body-file"], { required: true });
-
-  const comment = { path: values.path, body, side, line };
-  if (values["start-line"] !== undefined) {
-    const startLine = positiveInt(values["start-line"], "--start-line");
-    if (startLine >= line) {
+  const comment = { path, body, side, line };
+  if (startLine !== undefined) {
+    comment.start_line = positiveInt(startLine, "--start-line");
+    if (comment.start_line >= line) {
       fail(`--start-line (${startLine}) must be less than --line (${line})`);
     }
-    comment.start_line = startLine;
     comment.start_side = side;
   }
 
@@ -159,22 +132,16 @@ async function cmdQueueInlineComment(args) {
       ? `lines ${comment.start_line}-${line}`
       : `line ${line}`;
   console.log(
-    `Queued comment for ${values.path} ${range} (${file}). ` +
+    `Queued comment for ${path} ${range} (${file}). ` +
       "Call 'comment-review' when you're done adding comments.",
   );
 }
 
 async function cmdReplyInlineComment(args) {
-  const { values } = parseArgs({
-    args,
-    options: {
-      "comment-id": { type: "string" },
-      "body-file": { type: "string" },
-    },
+  const [{ commentId, body }] = await getOptions(args, {
+    commentId: { long: "comment-id", map: positiveInt },
+    body: { long: "body-file", map: readBodyFile, required: true },
   });
-  if (!values["comment-id"]) fail("--comment-id is required");
-  const commentId = positiveInt(values["comment-id"], "--comment-id");
-  const body = await readBodyFile(values["body-file"], { required: true });
 
   const token = requireToken();
   const { owner, repo } = repoFromEnv();
@@ -269,14 +236,10 @@ async function finalizeReview(event, body) {
 }
 
 async function cmdCommentReview(args) {
-  const { values } = parseArgs({
-    args,
-    options: { "body-file": { type: "string" } },
+  const [{ body }] = await getOptions(args, {
+    body: { long: "body-file", map: readBodyFile },
   });
-  const { comments, result, skipped } = await finalizeReview(
-    "COMMENT",
-    await readBodyFile(values["body-file"], { required: false }),
-  );
+  const { comments, result, skipped } = await finalizeReview("COMMENT", body);
   if (skipped) {
     fail(
       "Nothing to submit: call queue-inline-comment first, or pass " +
@@ -289,14 +252,10 @@ async function cmdCommentReview(args) {
 }
 
 async function cmdApproveReview(args) {
-  const { values } = parseArgs({
-    args,
-    options: { "body-file": { type: "string" } },
+  const [{ body }] = await getOptions(args, {
+    body: { long: "body-file", map: readBodyFile },
   });
-  const { comments, event, result } = await finalizeReview(
-    "APPROVE",
-    await readBodyFile(values["body-file"], { required: false }),
-  );
+  const { comments, event, result } = await finalizeReview("APPROVE", body);
   if (event === "APPROVE") {
     console.log(
       `Submitted APPROVE review with ${comments.length} inline comment(s): ${result.html_url}`,
@@ -310,14 +269,10 @@ async function cmdApproveReview(args) {
 }
 
 async function cmdRequestChangesReview(args) {
-  const { values } = parseArgs({
-    args,
-    options: { "body-file": { type: "string" } },
+  const [{ body }] = await getOptions(args, {
+    body: { long: "body-file", map: readBodyFile, required: true },
   });
-  const { comments, result } = await finalizeReview(
-    "REQUEST_CHANGES",
-    await readBodyFile(values["body-file"], { required: true }),
-  );
+  const { comments, result } = await finalizeReview("REQUEST_CHANGES", body);
   console.log(
     `Submitted REQUEST_CHANGES review with ${comments.length} inline comment(s): ${result.html_url}`,
   );
@@ -329,12 +284,9 @@ async function cmdRequestChangesReview(args) {
  * `checked` guards against Claude resolving a thread it didn't start.
  */
 async function doResolveThread(args, { checked }) {
-  const { values } = parseArgs({
-    args,
-    options: { "thread-id": { type: "string" } },
+  const [{ threadId }] = await getOptions(args, {
+    threadId: { long: "thread-id", map: required },
   });
-  if (!values["thread-id"]) fail("--thread-id is required");
-  const threadId = values["thread-id"];
 
   const token = requireToken();
 
@@ -373,12 +325,9 @@ function cmdResolveAnyThread(args) {
  * `checked` guards against Claude hiding someone else's review.
  */
 async function doHideReview(args, { checked }) {
-  const { values } = parseArgs({
-    args,
-    options: { "review-id": { type: "string" } },
+  const [{ reviewId }] = await getOptions(args, {
+    reviewId: { long: "review-id", map: positiveInt },
   });
-  if (!values["review-id"]) fail("--review-id is required");
-  const reviewId = positiveInt(values["review-id"], "--review-id");
 
   const token = requireToken();
   const { owner, repo } = repoFromEnv();
@@ -426,11 +375,9 @@ function cmdHideAnyReview(args) {
  * approval sweep never actually watched happen live.
  */
 async function cmdSweep(args) {
-  const { values } = parseArgs({
-    args,
-    options: { "downgrade-approval": { type: "boolean" } },
+  const [{ forceDowngradeApproval }] = await getOptions(args, {
+    forceDowngradeApproval: { type: "boolean", long: "downgrade-approval" },
   });
-  const submitOpts = { forceDowngradeApproval: values["downgrade-approval"] };
 
   const root = queueRoot();
   let handled = 0;
@@ -439,7 +386,7 @@ async function cmdSweep(args) {
   const liveClaim = await claim(root);
   if (liveClaim) {
     console.log(`Found un-submitted comments queued at ${liveClaim}.`);
-    if (await trySubmit(liveClaim, submitOpts)) handled++;
+    if (await trySubmit(liveClaim, { forceDowngradeApproval })) handled++;
     else failed++;
   }
 
@@ -447,7 +394,7 @@ async function cmdSweep(args) {
     console.error(
       `::warning::Retrying abandoned review submission from ${dir}`,
     );
-    if (await trySubmit(dir, submitOpts)) handled++;
+    if (await trySubmit(dir, { forceDowngradeApproval })) handled++;
     else failed++;
   }
 
