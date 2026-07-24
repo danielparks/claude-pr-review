@@ -63,6 +63,19 @@ describe("pr-review CLI", () => {
     return execFileAsync("node", [CLI_PATH, ...args], { env: env(extraEnv) });
   }
 
+  function runQueueInlineComment(path, line, bodyPath, ...more) {
+    return run([
+      "queue-inline-comment",
+      "--path",
+      path,
+      "--line",
+      line,
+      "--body-file",
+      bodyPath,
+      ...more,
+    ]);
+  }
+
   it("init creates the queue directory", async () => {
     await withMockGitHub(async () => {
       const { stdout } = await run(["init"]);
@@ -84,23 +97,9 @@ describe("pr-review CLI", () => {
       responses.POST_review(5, 111),
 
       async ({ requests }) => {
-        await run([
-          "queue-inline-comment",
-          "--path",
-          "foo.js",
-          "--line",
-          "10",
-          "--body-file",
-          await bodyFile("issue one"),
-        ]);
-        await run([
-          "queue-inline-comment",
-          "--path",
-          "bar.js",
-          "--line",
-          "20",
-          "--body-file",
-          await bodyFile("issue two"),
+        await Promise.all([
+          runQueueInlineComment("foo.js", "10", await bodyFile("issue one")),
+          runQueueInlineComment("bar.js", "20", await bodyFile("issue two")),
         ]);
 
         const { stdout } = await run([
@@ -132,26 +131,9 @@ describe("pr-review CLI", () => {
 
       async ({ requests }) => {
         const commentBody = await bodyFile("ONE");
-        await run([
-          "queue-inline-comment",
-          "--path",
-          "foo.js",
-          "--line",
-          "10",
-          "--body-file",
-          commentBody,
-        ]);
-
+        await runQueueInlineComment("foo.js", "10", commentBody);
         await writeFile(commentBody, "TWO");
-        await run([
-          "queue-inline-comment",
-          "--path",
-          "bar.js",
-          "--line",
-          "20",
-          "--body-file",
-          commentBody,
-        ]);
+        await runQueueInlineComment("bar.js", "20", commentBody);
 
         const { stdout } = await run(["comment-review"]);
         expect(stdout).toMatch(/Submitted review with 2 inline comment/);
@@ -195,17 +177,13 @@ describe("pr-review CLI", () => {
   it("queue-inline-comment rejects startLine >= line", async () => {
     await withMockGitHub(async () => {
       await expect(
-        run([
-          "queue-inline-comment",
-          "--path",
+        runQueueInlineComment(
           "foo.js",
-          "--line",
           "10",
+          await bodyFile("issue"),
           "--start-line",
           "15",
-          "--body-file",
-          await bodyFile("issue"),
-        ]),
+        ),
       ).rejects.toThrow(/start-line/);
     });
   });
@@ -280,15 +258,7 @@ describe("pr-review CLI", () => {
       responses.POST_review(5, 116),
 
       async ({ requests }) => {
-        await run([
-          "queue-inline-comment",
-          "--path",
-          "foo.js",
-          "--line",
-          "10",
-          "--body-file",
-          await bodyFile("nice touch"),
-        ]);
+        await runQueueInlineComment("a.js", "10", await bodyFile("nice touch"));
 
         const body = await bodyFile("Looks great.");
         const { stdout } = await run(["approve-review", "--body-file", body]);
@@ -359,15 +329,11 @@ describe("pr-review CLI", () => {
       responses.POST_review(5, 117),
 
       async ({ requests }) => {
-        await run([
-          "queue-inline-comment",
-          "--path",
+        await runQueueInlineComment(
           "foo.js",
-          "--line",
           "10",
-          "--body-file",
           await bodyFile("this is broken"),
-        ]);
+        );
 
         const { stdout } = await run([
           "request-changes-review",
@@ -565,15 +531,11 @@ describe("pr-review CLI", () => {
       responses.POST_review(5, 113),
 
       async ({ requests }) => {
-        await run([
-          "queue-inline-comment",
-          "--path",
+        await runQueueInlineComment(
           "foo.js",
-          "--line",
           "1",
-          "--body-file",
           await bodyFile("forgotten issue"),
-        ]);
+        );
 
         const { stdout } = await run(["sweep"]);
         expect(stdout).toMatch(/Swept 1 pending submission/);
