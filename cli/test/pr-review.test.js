@@ -425,12 +425,41 @@ describe("pr-review CLI", () => {
     expect(mock.requests).toHaveLength(0);
   });
 
-  it("resolve-thread resolves the given thread", async () => {
+  // getThreadFirstCommentAuthor() and getViewerLogin() are both GraphQL
+  // calls to the same /graphql URL, issued concurrently -- these routes are
+  // told apart by query content (via `match`) rather than call order, since
+  // which one the mock server sees first isn't guaranteed.
+  function viewerRoute(login) {
+    return {
+      method: "POST",
+      pattern: /\/graphql$/,
+      match: (body) => /viewer/.test(body.query),
+      body: { data: { viewer: { login } } },
+    };
+  }
+
+  function threadFirstCommentAuthorRoute(login) {
+    return {
+      method: "POST",
+      pattern: /\/graphql$/,
+      match: (body) => /PullRequestReviewThread/.test(body.query),
+      body: {
+        data: { node: { comments: { nodes: [{ author: { login } }] } } },
+      },
+    };
+  }
+
+  it("resolve-thread resolves a thread it started", async () => {
     mock = await startMockGitHub([
+      viewerRoute("claude[bot]"),
+      threadFirstCommentAuthorRoute("claude[bot]"),
       {
         method: "POST",
         pattern: /\/graphql$/,
-        body: { data: { resolveReviewThread: { thread: { id: "thread1" } } } },
+        match: (body) => /resolveReviewThread/.test(body.query),
+        body: {
+          data: { resolveReviewThread: { thread: { id: "thread1" } } },
+        },
       },
     ]);
     const { stdout } = await run(["resolve-thread", "--thread-id", "thread1"], {
@@ -438,6 +467,50 @@ describe("pr-review CLI", () => {
     });
     expect(stdout).toMatch(/Resolved thread thread1/);
 
+    const graphqlRequests = mock.requests.filter((r) =>
+      r.url.endsWith("/graphql"),
+    );
+    expect(graphqlRequests).toHaveLength(3);
+    expect(
+      graphqlRequests.find((r) => /resolveReviewThread/.test(r.body.query)).body
+        .variables,
+    ).toEqual({ threadId: "thread1" });
+  });
+
+  it("resolve-thread refuses to resolve a thread it didn't start", async () => {
+    mock = await startMockGitHub([
+      viewerRoute("claude[bot]"),
+      threadFirstCommentAuthorRoute("someone-else"),
+    ]);
+    await expect(
+      run(["resolve-thread", "--thread-id", "thread1"], {
+        GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
+      }),
+    ).rejects.toThrow(/authored by someone-else.*resolve-any-thread/s);
+
+    const graphqlRequests = mock.requests.filter((r) =>
+      r.url.endsWith("/graphql"),
+    );
+    expect(graphqlRequests).toHaveLength(2);
+    expect(
+      graphqlRequests.some((r) => /resolveReviewThread/.test(r.body.query)),
+    ).toBe(false);
+  });
+
+  it("resolve-any-thread resolves a thread it didn't start", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "POST",
+        pattern: /\/graphql$/,
+        body: { data: { resolveReviewThread: { thread: { id: "thread1" } } } },
+      },
+    ]);
+    const { stdout } = await run(
+      ["resolve-any-thread", "--thread-id", "thread1"],
+      { GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql` },
+    );
+    expect(stdout).toMatch(/Resolved thread thread1/);
+    expect(mock.requests).toHaveLength(1);
     expect(mock.requests[0].body.variables).toEqual({ threadId: "thread1" });
   });
 
@@ -449,16 +522,18 @@ describe("pr-review CLI", () => {
     expect(mock.requests).toHaveLength(0);
   });
 
-  it("hide-review minimizes the given review as outdated", async () => {
+  it("hide-review minimizes its own review as outdated", async () => {
     mock = await startMockGitHub([
       {
         method: "GET",
         pattern: /\/pulls\/5\/reviews\/111$/,
-        body: { node_id: "review-node-1" },
+        body: { node_id: "review-node-1", user: { login: "claude[bot]" } },
       },
+      viewerRoute("claude[bot]"),
       {
         method: "POST",
         pattern: /\/graphql$/,
+        match: (body) => /minimizeComment/.test(body.query),
         body: {
           data: {
             minimizeComment: { minimizedComment: { isMinimized: true } },
@@ -471,12 +546,62 @@ describe("pr-review CLI", () => {
     });
     expect(stdout).toMatch(/Hid review 111 as outdated/);
 
-    const [graphqlRequest] = mock.requests.filter((r) =>
-      r.url.endsWith("/graphql"),
+    const graphqlRequest = mock.requests.find((r) =>
+      /minimizeComment/.test(r.body?.query),
     );
     expect(graphqlRequest.body.variables).toEqual({
       subjectId: "review-node-1",
     });
+  });
+
+  it("hide-review refuses to hide someone else's review", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "GET",
+        pattern: /\/pulls\/5\/reviews\/111$/,
+        body: { node_id: "review-node-1", user: { login: "someone-else" } },
+      },
+      viewerRoute("claude[bot]"),
+    ]);
+    await expect(
+      run(["hide-review", "--review-id", "111"], {
+        GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
+      }),
+    ).rejects.toThrow(/authored by someone-else.*hide-any-review/s);
+
+    const graphqlRequests = mock.requests.filter((r) =>
+      r.url.endsWith("/graphql"),
+    );
+    expect(graphqlRequests).toHaveLength(1);
+    expect(
+      graphqlRequests.some((r) => /minimizeComment/.test(r.body.query)),
+    ).toBe(false);
+  });
+
+  it("hide-any-review minimizes someone else's review as outdated", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "GET",
+        pattern: /\/pulls\/5\/reviews\/111$/,
+        body: { node_id: "review-node-1", user: { login: "someone-else" } },
+      },
+      {
+        method: "POST",
+        pattern: /\/graphql$/,
+        body: {
+          data: {
+            minimizeComment: { minimizedComment: { isMinimized: true } },
+          },
+        },
+      },
+    ]);
+    const { stdout } = await run(["hide-any-review", "--review-id", "111"], {
+      GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
+    });
+    expect(stdout).toMatch(/Hid review 111 as outdated/);
+    expect(
+      mock.requests.filter((r) => r.url.endsWith("/graphql")),
+    ).toHaveLength(1);
   });
 
   it("sweep posts a batch Claude queued but never submitted", async () => {

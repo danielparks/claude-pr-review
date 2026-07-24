@@ -25,8 +25,11 @@ import {
   apiErrorHint,
   createReply,
   createReview,
-  hideReview,
+  getReview,
+  getThreadFirstCommentAuthor,
+  getViewerLogin,
   isApprovalRejected,
+  minimizeReview,
   resolveReviewThread,
 } from "./lib/github.js";
 import { redactGitHubTokens } from "./lib/redact.js";
@@ -313,23 +316,66 @@ async function cmdRequestChangesReview(args) {
   );
 }
 
-async function cmdResolveThread(args) {
+/**
+ * `checked` guards against Claude resolving a thread it didn't start -- e.g.
+ * because someone replied to it, rather than because the underlying issue
+ * was actually fixed. `resolve-any-thread` (checked: false) skips that guard
+ * for workflows that accept the trade-off; see the "Opt-in tools" section of
+ * README.md for both.
+ */
+async function doResolveThread(args, { checked }) {
   const { values } = parseArgs({
     args,
     options: { "thread-id": { type: "string" } },
   });
   if (!values["thread-id"]) fail("--thread-id is required");
+  const threadId = values["thread-id"];
 
   const token = requireToken();
+
+  if (checked) {
+    let author, viewerLogin;
+    try {
+      [author, viewerLogin] = await Promise.all([
+        getThreadFirstCommentAuthor(token, threadId),
+        getViewerLogin(token),
+      ]);
+    } catch (error) {
+      fail(`${error.message}${apiErrorHint(error)}`);
+    }
+    if (author !== viewerLogin) {
+      fail(
+        `Thread ${threadId}'s first comment was authored by ` +
+          `${author ?? "unknown"}, not the authenticated user ` +
+          `(${viewerLogin}) -- use resolve-any-thread instead if you meant ` +
+          "to resolve a thread you didn't start.",
+      );
+    }
+  }
+
   try {
-    await resolveReviewThread(token, values["thread-id"]);
-    console.log(`Resolved thread ${values["thread-id"]}.`);
+    await resolveReviewThread(token, threadId);
+    console.log(`Resolved thread ${threadId}.`);
   } catch (error) {
     fail(`${error.message}${apiErrorHint(error)}`);
   }
 }
 
-async function cmdHideReview(args) {
+function cmdResolveThread(args) {
+  return doResolveThread(args, { checked: true });
+}
+
+function cmdResolveAnyThread(args) {
+  return doResolveThread(args, { checked: false });
+}
+
+/**
+ * `checked` guards against Claude hiding someone else's review -- this is
+ * meant for superseding Claude's own stale reviews on re-review, not
+ * anyone else's. `hide-any-review` (checked: false) skips that guard; see
+ * the "Opt-in tools" section of README.md for both.
+ */
+async function doHideReview(args, { checked }) {
   const { values } = parseArgs({
     args,
     options: { "review-id": { type: "string" } },
@@ -340,12 +386,40 @@ async function cmdHideReview(args) {
   const token = requireToken();
   const { owner, repo } = repoFromEnv();
   const pr = prNumberFromEnv();
+
+  let review;
   try {
-    await hideReview(token, owner, repo, pr, reviewId);
+    review = await getReview(token, owner, repo, pr, reviewId);
+  } catch (error) {
+    fail(`${error.message}${apiErrorHint(error)}`);
+  }
+
+  if (checked) {
+    const viewerLogin = await getViewerLogin(token);
+    if (review.user?.login !== viewerLogin) {
+      fail(
+        `Review ${reviewId} was authored by ` +
+          `${review.user?.login ?? "unknown"}, not the authenticated user ` +
+          `(${viewerLogin}) -- use hide-any-review instead if you meant to ` +
+          "hide someone else's review.",
+      );
+    }
+  }
+
+  try {
+    await minimizeReview(token, review.node_id);
     console.log(`Hid review ${reviewId} as outdated.`);
   } catch (error) {
     fail(`${error.message}${apiErrorHint(error)}`);
   }
+}
+
+function cmdHideReview(args) {
+  return doHideReview(args, { checked: true });
+}
+
+function cmdHideAnyReview(args) {
+  return doHideReview(args, { checked: false });
 }
 
 /**
@@ -424,7 +498,9 @@ const COMMANDS = {
   "approve-review": cmdApproveReview,
   "request-changes-review": cmdRequestChangesReview,
   "resolve-thread": cmdResolveThread,
+  "resolve-any-thread": cmdResolveAnyThread,
   "hide-review": cmdHideReview,
+  "hide-any-review": cmdHideAnyReview,
   sweep: cmdSweep,
 };
 

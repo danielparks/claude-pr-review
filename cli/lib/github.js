@@ -112,13 +112,53 @@ export async function resolveReviewThread(token, threadId) {
   );
 }
 
-/** Minimizes a top-level review as outdated, given its REST review id. */
-export async function hideReview(token, owner, repo, pullNumber, reviewId) {
-  const review = await request(
+/**
+ * The login of the authenticated (Claude App) user, e.g. `claude[bot]`.
+ *
+ * Uses GraphQL rather than REST's `GET /user` because that REST endpoint is
+ * user-to-server only -- it 403s ("Resource not accessible by integration")
+ * for a GitHub App installation token, which is what this token always is
+ * here. GraphQL's `viewer` field is documented to resolve to the app's bot
+ * user for an installation token instead of erroring.
+ */
+export async function getViewerLogin(token) {
+  const data = await graphqlRequest(token, `query { viewer { login } }`);
+  return data.viewer.login;
+}
+
+/**
+ * The login of the author of a review thread's first comment, given the
+ * thread's GraphQL node id, or `null` if it has none (shouldn't normally
+ * happen for a real thread).
+ */
+export async function getThreadFirstCommentAuthor(token, threadId) {
+  const data = await graphqlRequest(
+    token,
+    `query($threadId: ID!) {
+      node(id: $threadId) {
+        ... on PullRequestReviewThread {
+          comments(first: 1) {
+            nodes { author { login } }
+          }
+        }
+      }
+    }`,
+    { threadId },
+  );
+  return data.node?.comments?.nodes?.[0]?.author?.login ?? null;
+}
+
+/** Fetches a single review, given its REST id. */
+export async function getReview(token, owner, repo, pullNumber, reviewId) {
+  return await request(
     token,
     "GET",
     `/repos/${owner}/${repo}/pulls/${pullNumber}/reviews/${reviewId}`,
   );
+}
+
+/** Minimizes a top-level review as outdated, given its GraphQL node id. */
+export async function minimizeReview(token, nodeId) {
   await graphqlRequest(
     token,
     `mutation($subjectId: ID!) {
@@ -126,7 +166,7 @@ export async function hideReview(token, owner, repo, pullNumber, reviewId) {
         minimizedComment { isMinimized }
       }
     }`,
-    { subjectId: review.node_id },
+    { subjectId: nodeId },
   );
 }
 

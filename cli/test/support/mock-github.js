@@ -10,8 +10,15 @@ export function startMockGitHub(routes) {
       const url = req.url ?? "";
       requests.push({ method: req.method ?? "", url, body });
 
+      // `match` lets a route additionally check the request body, so
+      // concurrent requests to the same method+URL (e.g. two different
+      // GraphQL queries, both POSTed to /graphql) can be told apart without
+      // depending on which one the server happens to receive first.
       const route = routes.find(
-        (r) => r.method === req.method && r.pattern.test(url),
+        (r) =>
+          r.method === req.method &&
+          r.pattern.test(url) &&
+          (!r.match || r.match(body)),
       );
       res.setHeader("Content-Type", "application/json");
       if (!route) {

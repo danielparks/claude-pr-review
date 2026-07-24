@@ -4,8 +4,11 @@ import {
   createReply,
   createReview,
   getHeadSha,
-  hideReview,
+  getReview,
+  getThreadFirstCommentAuthor,
+  getViewerLogin,
   isApprovalRejected,
+  minimizeReview,
   resolveReviewThread,
 } from "../lib/github.js";
 import { startMockGitHub } from "./support/mock-github.js";
@@ -143,13 +146,24 @@ describe("github", () => {
     );
   });
 
-  it("hideReview() looks up the review's node id, then minimizes it", async () => {
+  it("getReview() fetches a review by id", async () => {
     mock = await startMockGitHub([
       {
         method: "GET",
         pattern: /\/pulls\/5\/reviews\/111$/,
-        body: { node_id: "review-node-1" },
+        body: { node_id: "review-node-1", user: { login: "claude[bot]" } },
       },
+    ]);
+    process.env.GITHUB_API_URL = mock.baseUrl;
+
+    expect(await getReview("test", "acme", "widgets", 5, 111)).toEqual({
+      node_id: "review-node-1",
+      user: { login: "claude[bot]" },
+    });
+  });
+
+  it("minimizeReview() posts the mutation with the given node id", async () => {
+    mock = await startMockGitHub([
       {
         method: "POST",
         pattern: /\/graphql$/,
@@ -160,10 +174,9 @@ describe("github", () => {
         },
       },
     ]);
-    process.env.GITHUB_API_URL = mock.baseUrl;
     process.env.GITHUB_GRAPHQL_URL = `${mock.baseUrl}/graphql`;
 
-    await hideReview("test", "acme", "widgets", 5, 111);
+    await minimizeReview("test", "review-node-1");
 
     const [graphqlRequest] = mock.requests.filter((r) =>
       r.url.endsWith("/graphql"),
@@ -173,6 +186,63 @@ describe("github", () => {
     });
     expect(graphqlRequest.body.query).toMatch(/minimizeComment/);
     expect(graphqlRequest.body.query).toMatch(/OUTDATED/);
+  });
+
+  it("getViewerLogin() fetches the authenticated user's login via GraphQL viewer", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "POST",
+        pattern: /\/graphql$/,
+        body: { data: { viewer: { login: "claude[bot]" } } },
+      },
+    ]);
+    process.env.GITHUB_GRAPHQL_URL = `${mock.baseUrl}/graphql`;
+
+    expect(await getViewerLogin("test")).toBe("claude[bot]");
+    const [request] = mock.requests;
+    expect(request.body.query).toMatch(/viewer/);
+  });
+
+  it("getThreadFirstCommentAuthor() returns the first comment's author login, not a later one", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "POST",
+        pattern: /\/graphql$/,
+        body: {
+          data: {
+            node: {
+              comments: {
+                nodes: [
+                  { author: { login: "someone" } },
+                  { author: { login: "someone-else" } },
+                ],
+              },
+            },
+          },
+        },
+      },
+    ]);
+    process.env.GITHUB_GRAPHQL_URL = `${mock.baseUrl}/graphql`;
+
+    expect(await getThreadFirstCommentAuthor("test", "thread1")).toBe(
+      "someone",
+    );
+    const [request] = mock.requests;
+    expect(request.body.variables).toEqual({ threadId: "thread1" });
+    expect(request.body.query).toMatch(/PullRequestReviewThread/);
+  });
+
+  it("getThreadFirstCommentAuthor() returns null when the thread has no comments", async () => {
+    mock = await startMockGitHub([
+      {
+        method: "POST",
+        pattern: /\/graphql$/,
+        body: { data: { node: { comments: { nodes: [] } } } },
+      },
+    ]);
+    process.env.GITHUB_GRAPHQL_URL = `${mock.baseUrl}/graphql`;
+
+    expect(await getThreadFirstCommentAuthor("test", "thread1")).toBeNull();
   });
 
   it("createReply() posts to the comment's replies endpoint", async () => {
