@@ -392,7 +392,12 @@ async function doHideReview(args, { checked }) {
   }
 
   if (checked) {
-    const viewerLogin = await getViewerLogin(token);
+    let viewerLogin;
+    try {
+      viewerLogin = await getViewerLogin(token);
+    } catch (error) {
+      fail(`${error.message}${apiErrorHint(error)}`);
+    }
     if (review.user?.login !== viewerLogin) {
       fail(
         `Review ${reviewId} was authored by ` +
