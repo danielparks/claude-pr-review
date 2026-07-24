@@ -77,18 +77,14 @@ describe("pr-review CLI", () => {
   }
 
   it("init creates the queue directory", async () => {
-    await withMockGitHub(async () => {
-      const { stdout } = await run(["init"]);
-      expect(stdout).toMatch(/Created queue directory/);
-      expect(await readdir(queueDir)).toEqual([]);
-    });
+    const { stdout } = await run(["init"]);
+    expect(stdout).toMatch(/Created queue directory/);
+    expect(await readdir(queueDir)).toEqual([]);
   });
 
   it("init fails if the queue directory already exists", async () => {
-    await withMockGitHub(async () => {
-      await run(["init"]);
-      await expect(run(["init"])).rejects.toThrow(/already exists/);
-    });
+    await run(["init"]);
+    await expect(run(["init"])).rejects.toThrow(/already exists/);
   });
 
   it("queue-inline-comment + queue-inline-comment + comment-review posts one grouped review", async () => {
@@ -175,17 +171,15 @@ describe("pr-review CLI", () => {
   });
 
   it("queue-inline-comment rejects startLine >= line", async () => {
-    await withMockGitHub(async () => {
-      await expect(
-        runQueueInlineComment(
-          "foo.js",
-          "10",
-          await bodyFile("issue"),
-          "--start-line",
-          "15",
-        ),
-      ).rejects.toThrow(/start-line/);
-    });
+    await expect(
+      runQueueInlineComment(
+        "foo.js",
+        "10",
+        await bodyFile("issue"),
+        "--start-line",
+        "15",
+      ),
+    ).rejects.toThrow(/start-line/);
   });
 
   it("reply-inline-comment posts immediately", async () => {
