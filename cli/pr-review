@@ -32,6 +32,7 @@ import {
   isApprovalRejected,
   minimizeReview,
   resolveReviewThread,
+  withApiError,
 } from "./lib/github.js";
 import redact from "./lib/redact.js";
 
@@ -133,12 +134,10 @@ async function cmdReplyInlineComment(args) {
   const token = requireToken();
   const { owner, repo } = repoFromEnv();
   const pr = prNumberFromEnv();
-  try {
-    const result = await createReply(token, owner, repo, pr, commentId, body);
-    console.log(`Posted reply: ${result.html_url}`);
-  } catch (error) {
-    fail(`${error.message}${apiErrorHint(error)}`);
-  }
+  const result = await withApiError(() =>
+    createReply(token, owner, repo, pr, commentId, body),
+  );
+  console.log(`Posted reply: ${result.html_url}`);
 }
 
 const DOWNGRADE_REJECTED_NOTE =
@@ -221,11 +220,7 @@ async function finalizeReview(event, body) {
   const claimedDir = await claim(queueRoot(), { create: true });
   await setReview(claimedDir, event, body);
 
-  try {
-    return await submitClaimedBatch(claimedDir);
-  } catch (error) {
-    fail(`${error.message}${apiErrorHint(error)}`);
-  }
+  return await withApiError(() => submitClaimedBatch(claimedDir));
 }
 
 async function cmdCommentReview(args) {
@@ -284,15 +279,12 @@ async function doResolveThread(args, { checked }) {
   const token = requireToken();
 
   if (checked) {
-    let author, viewerLogin;
-    try {
-      [author, viewerLogin] = await Promise.all([
+    const [author, viewerLogin] = await withApiError(() =>
+      Promise.all([
         getThreadFirstCommentAuthor(token, threadId),
         getViewerLogin(token),
-      ]);
-    } catch (error) {
-      fail(`${error.message}${apiErrorHint(error)}`);
-    }
+      ]),
+    );
     if (author !== viewerLogin) {
       fail(
         `Thread ${threadId}'s first comment was authored by ` +
@@ -303,12 +295,8 @@ async function doResolveThread(args, { checked }) {
     }
   }
 
-  try {
-    await resolveReviewThread(token, threadId);
-    console.log(`Resolved thread ${threadId}.`);
-  } catch (error) {
-    fail(`${error.message}${apiErrorHint(error)}`);
-  }
+  await withApiError(() => resolveReviewThread(token, threadId));
+  console.log(`Resolved thread ${threadId}.`);
 }
 
 function cmdResolveMyThread(args) {
@@ -333,20 +321,12 @@ async function doHideReview(args, { checked }) {
   const { owner, repo } = repoFromEnv();
   const pr = prNumberFromEnv();
 
-  let review;
-  try {
-    review = await getReview(token, owner, repo, pr, reviewId);
-  } catch (error) {
-    fail(`${error.message}${apiErrorHint(error)}`);
-  }
+  const review = await withApiError(() =>
+    getReview(token, owner, repo, pr, reviewId),
+  );
 
   if (checked) {
-    let viewerLogin;
-    try {
-      viewerLogin = await getViewerLogin(token);
-    } catch (error) {
-      fail(`${error.message}${apiErrorHint(error)}`);
-    }
+    const viewerLogin = await withApiError(() => getViewerLogin(token));
     if (review.user?.login !== viewerLogin) {
       fail(
         `Review ${reviewId} was authored by ` +
@@ -357,12 +337,8 @@ async function doHideReview(args, { checked }) {
     }
   }
 
-  try {
-    await minimizeReview(token, review.node_id);
-    console.log(`Hid review ${reviewId} as outdated.`);
-  } catch (error) {
-    fail(`${error.message}${apiErrorHint(error)}`);
-  }
+  await withApiError(() => minimizeReview(token, review.node_id));
+  console.log(`Hid review ${reviewId} as outdated.`);
 }
 
 function cmdHideMyReview(args) {

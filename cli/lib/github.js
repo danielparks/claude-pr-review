@@ -1,3 +1,5 @@
+import { fail } from "./util.js";
+
 const DEFAULT_API_URL = "https://api.github.com";
 
 export class GitHubApiError extends Error {
@@ -235,4 +237,17 @@ export function apiErrorHint(error) {
     return "\n\nThis usually means the thread or review id is wrong or stale.";
   }
   return "";
+}
+
+/**
+ * Wrapper to fail correctly when a (likely) API error is raised.
+ *
+ * It’s fine if this catches some other error — apiErrorHint() will return "".
+ */
+export async function withApiError(func) {
+  try {
+    return await func();
+  } catch (error) {
+    fail(`${error.message}${apiErrorHint(error)}`);
+  }
 }
