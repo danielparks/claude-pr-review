@@ -41,21 +41,21 @@ Separately, any `APPROVE` review GitHub itself rejects because the token isn't p
 
 A few `pr-review` subcommands are deliberately left out of the default `allowed-tools` list in `action.yaml`. They're real capabilities some workflows want, but they change what kind of thing Claude _is_ in a PR — from "leaves comments" to "affects merge state" — so they're opt-in only, enabled by adding the relevant line(s) below to the `additional-allowed-tools` input, and should be paired with your own `additional-prompt` text describing when Claude should use them.
 
-### `resolve-thread --thread-id ID` / `resolve-any-thread --thread-id ID`
+### `resolve-my-thread --thread-id ID` / `resolve-any-thread --thread-id ID`
 
 Resolves an inline-comment thread via GitHub's `resolveReviewThread` GraphQL mutation, given the thread's GraphQL node id. [gh-pr-render] shows this above the diff at the very start of the thread.
 
 **Danger:** resolving is a judgment call. If Claude resolves a thread because someone replied to it, rather than because the underlying issue was actually fixed, it removes the visual signal a human reviewer relies on to know what's still open.
 
-`resolve-thread` checks that the thread was started by the authenticated user, i.e. Claude. `resolve-any-thread` is the same mutation without the check, for workflows that accept the trade-off.
+`resolve-my-thread` checks that the thread was started by the authenticated user, i.e. Claude. `resolve-any-thread` is the same mutation without the check, for workflows that accept the trade-off.
 
-### `hide-review --review-id ID` / `hide-any-review --review-id ID`
+### `hide-my-review --review-id ID` / `hide-any-review --review-id ID`
 
 Minimizes a top-level review (classified as `OUTDATED`) via GitHub's `minimizeComment` GraphQL mutation, given the review's REST id.
 
 **Danger:** minimizing isn't easily reversible outside the GraphQL API, and it removes the review from the normal PR timeline for anyone reading it later.
 
-`hide-review` checks that the review was authored by the authenticated user, i.e. Claude. `hide-any-review` is the same mutation without the check, for workflows that accept the trade-off.
+`hide-my-review` checks that the review was authored by the authenticated user, i.e. Claude. `hide-any-review` is the same mutation without the check, for workflows that accept the trade-off.
 
 ### `approve-review [--body-file PATH]` / `request-changes-review --body-file PATH`
 

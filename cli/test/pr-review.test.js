@@ -417,9 +417,9 @@ describe("pr-review CLI", () => {
     expect(reviewRequest.body.comments).toHaveLength(1);
   });
 
-  it("resolve-thread requires --thread-id", async () => {
+  it("resolve-my-thread requires --thread-id", async () => {
     mock = await startMockGitHub([]);
-    await expect(run(["resolve-thread"])).rejects.toThrow(
+    await expect(run(["resolve-my-thread"])).rejects.toThrow(
       /--thread-id is required/,
     );
     expect(mock.requests).toHaveLength(0);
@@ -449,7 +449,7 @@ describe("pr-review CLI", () => {
     };
   }
 
-  it("resolve-thread resolves a thread it started", async () => {
+  it("resolve-my-thread resolves a thread it started", async () => {
     mock = await startMockGitHub([
       viewerRoute("claude[bot]"),
       threadFirstCommentAuthorRoute("claude[bot]"),
@@ -462,9 +462,12 @@ describe("pr-review CLI", () => {
         },
       },
     ]);
-    const { stdout } = await run(["resolve-thread", "--thread-id", "thread1"], {
-      GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
-    });
+    const { stdout } = await run(
+      ["resolve-my-thread", "--thread-id", "thread1"],
+      {
+        GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
+      },
+    );
     expect(stdout).toMatch(/Resolved thread thread1/);
 
     const graphqlRequests = mock.requests.filter((r) =>
@@ -477,13 +480,13 @@ describe("pr-review CLI", () => {
     ).toEqual({ threadId: "thread1" });
   });
 
-  it("resolve-thread refuses to resolve a thread it didn't start", async () => {
+  it("resolve-my-thread refuses to resolve a thread it didn't start", async () => {
     mock = await startMockGitHub([
       viewerRoute("claude[bot]"),
       threadFirstCommentAuthorRoute("someone-else"),
     ]);
     await expect(
-      run(["resolve-thread", "--thread-id", "thread1"], {
+      run(["resolve-my-thread", "--thread-id", "thread1"], {
         GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
       }),
     ).rejects.toThrow(/authored by someone-else.*resolve-any-thread/s);
@@ -514,15 +517,15 @@ describe("pr-review CLI", () => {
     expect(mock.requests[0].body.variables).toEqual({ threadId: "thread1" });
   });
 
-  it("hide-review requires --review-id", async () => {
+  it("hide-my-review requires --review-id", async () => {
     mock = await startMockGitHub([]);
-    await expect(run(["hide-review"])).rejects.toThrow(
+    await expect(run(["hide-my-review"])).rejects.toThrow(
       /--review-id is required/,
     );
     expect(mock.requests).toHaveLength(0);
   });
 
-  it("hide-review minimizes its own review as outdated", async () => {
+  it("hide-my-review minimizes its own review as outdated", async () => {
     mock = await startMockGitHub([
       {
         method: "GET",
@@ -541,7 +544,7 @@ describe("pr-review CLI", () => {
         },
       },
     ]);
-    const { stdout } = await run(["hide-review", "--review-id", "111"], {
+    const { stdout } = await run(["hide-my-review", "--review-id", "111"], {
       GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
     });
     expect(stdout).toMatch(/Hid review 111 as outdated/);
@@ -554,7 +557,7 @@ describe("pr-review CLI", () => {
     });
   });
 
-  it("hide-review refuses to hide someone else's review", async () => {
+  it("hide-my-review refuses to hide someone else's review", async () => {
     mock = await startMockGitHub([
       {
         method: "GET",
@@ -564,7 +567,7 @@ describe("pr-review CLI", () => {
       viewerRoute("claude[bot]"),
     ]);
     await expect(
-      run(["hide-review", "--review-id", "111"], {
+      run(["hide-my-review", "--review-id", "111"], {
         GITHUB_GRAPHQL_URL: `${mock.baseUrl}/graphql`,
       }),
     ).rejects.toThrow(/authored by someone-else.*hide-any-review/s);

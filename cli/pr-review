@@ -359,7 +359,7 @@ async function doResolveThread(args, { checked }) {
   }
 }
 
-function cmdResolveThread(args) {
+function cmdResolveMyThread(args) {
   return doResolveThread(args, { checked: true });
 }
 
@@ -411,7 +411,7 @@ async function doHideReview(args, { checked }) {
   }
 }
 
-function cmdHideReview(args) {
+function cmdHideMyReview(args) {
   return doHideReview(args, { checked: true });
 }
 
@@ -494,9 +494,9 @@ const COMMANDS = {
   "comment-review": cmdCommentReview,
   "approve-review": cmdApproveReview,
   "request-changes-review": cmdRequestChangesReview,
-  "resolve-thread": cmdResolveThread,
+  "resolve-my-thread": cmdResolveMyThread,
   "resolve-any-thread": cmdResolveAnyThread,
-  "hide-review": cmdHideReview,
+  "hide-my-review": cmdHideMyReview,
   "hide-any-review": cmdHideAnyReview,
   sweep: cmdSweep,
 };
