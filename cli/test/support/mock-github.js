@@ -1,5 +1,29 @@
 import { createServer } from "node:http";
 
+export async function withMockGitHub(...routes /*, func*/) {
+  const func = routes.pop();
+  const old_env = {
+    GITHUB_API_URL: process.env.GITHUB_API_URL,
+    GITHUB_GRAPHQL_URL: process.env.GITHUB_GRAPHQL_URL,
+  };
+  const mock = await startMockGitHub(routes);
+  process.env.GITHUB_API_URL = mock.baseUrl;
+  process.env.GITHUB_GRAPHQL_URL = `${mock.baseUrl}/graphql`;
+
+  try {
+    return await func(mock);
+  } finally {
+    await mock?.close();
+    for (const name in old_env) {
+      if (old_env[name] === undefined) {
+        delete process[name];
+      } else {
+        process[name] = old_env[name];
+      }
+    }
+  }
+}
+
 export function startMockGitHub(routes) {
   const requests = [];
   const server = createServer((req, res) => {
@@ -56,4 +80,8 @@ export function startMockGitHub(routes) {
       });
     });
   });
+}
+
+export function filterByUrlEnd(requests, suffix) {
+  return requests.filter((r) => r.url.endsWith(suffix));
 }
