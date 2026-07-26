@@ -114,6 +114,19 @@ This is useful if you just want to add a tool to the default tool list. In parti
 
 Version of the [gh-pr-render] tool to use. Defaults to the latest version at the time of this action’s release.
 
+### `execution-log-artifact-retention`
+
+How long to keep the Claude execution log artifact in days.
+
+`disabled` or `0` means not to create it.
+
+> [!WARNING]
+> The log can contain repository secrets. Artifacts are available to the public on public repositories.
+
+This attempts to redact GitHub tokens, Anthropic API keys, and other Anthropic secrets. There is no guarantee that it will succeed — keys could be broken up into multiple strings.
+
+Defaults to: `disabled`
+
 ## Details
 
 ### Posting review comments

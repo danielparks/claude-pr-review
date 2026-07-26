@@ -106,6 +106,19 @@ inputs:
   gh-pr-render-version:
     description: Version of the `gh-pr-render` tool to use.
     default: 0.5.0
+  execution-log-artifact-retention:
+    description: >
+      How long to keep the Claude execution log artifact in days.
+
+      "Disabled" or 0 means not to create it.
+
+      WARNING: The log can contain repository secrets. Artifacts are available
+      to the public on public repositories.
+
+      This attempts to redact GitHub tokens, Anthropic API keys, and other
+      Anthropic secrets. There is no guarantee that it will succeed — keys could
+      be broken up into multiple strings.
+    default: disabled
 
 runs:
   using: composite
@@ -283,3 +296,46 @@ runs:
           FLAGS+=(--downgrade-approval)
         fi
         node "$CLI_SCRIPT" sweep "${FLAGS[@]}"
+
+    - name: Compress Claude’s execution log for upload if desired
+      id: execution-log
+      if: always() && steps.diff.outputs.skip != 'true'
+      shell: bash
+      env:
+        LOG_PATH: ${{ runner.temp }}/claude-execution-output.json
+        REPO: ${{ github.repository }}
+        RETENTION: ${{ inputs.execution-log-artifact-retention }}
+        SCRIPTS: ${{ github.action_path }}/scripts
+      run: |
+        set -euo pipefail
+        # Needs to be a number greater than 0.
+        if [[ "$RETENTION" =~ ^[0-9]+$ && "$RETENTION" != 0 ]]; then
+          if [ -f "$LOG_PATH" ] ; then
+            REPO_NAME=$(echo "$REPO" | cut -f2 -d/)
+            DATE=$(date +%Y-%m-%d_%H-%M-%S)
+            OUTPUT="${RUNNER_TEMP}/${REPO_NAME}_${DATE}_claude-execution-output.json.gz"
+            <"$LOG_PATH" "${SCRIPTS}/redact" | gzip >"$OUTPUT"
+            echo "path=${OUTPUT}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No execution-output.json found"
+          fi
+        fi
+
+    - name: Create artifact from execution log
+      id: log-upload
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      if: always() && steps.execution-log.outputs.path != ''
+      with:
+        name: claude-execution-output.json.gz
+        path: ${{ steps.execution-log.outputs.path }}
+        retention-days: ${{ inputs.execution-log-artifact-retention }}
+        archive: false
+        # We should not get here if the log did not exist:
+        if-no-files-found: error
+
+    - name: Output artifact URL
+      if: always() && steps.log-upload.outputs.artifact-url != ''
+      shell: bash
+      env:
+        URL: ${{ steps.log-upload.outputs.artifact-url }}
+      run: echo "::notice::Execution log artifact ${URL}"

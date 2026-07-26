@@ -1,0 +1,14 @@
+#!/usr/bin/env node
+
+import redact from "../cli/lib/redact.js";
+
+async function readStdin() {
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    // Chunks could end in the middle of a secret, so redact at the end.
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+process.stdout.write(redact(await readStdin()));
