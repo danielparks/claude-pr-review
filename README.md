@@ -114,9 +114,9 @@ This is useful if you just want to add a tool to the default tool list. In parti
 
 Version of the [gh-pr-render] tool to use. Defaults to the latest version at the time of this action’s release.
 
-### `execution-log-artifact-retention`
+### `thinking-log-artifact-retention`
 
-How long to keep the Claude execution log artifact in days.
+How long to keep the Claude thinking log artifact in days.
 
 `disabled` or `0` means not to create it.
 

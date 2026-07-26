@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file.
 - Clarified prompt (previously example prompts) by combining instructions on how to submit comments with instructions on when to submit comments.
 - Added `additional-allowed-tools` input that appends to default allowed tools list.
 - Added `additional-prompt` input that appends to the default prompt.
-- Added `execution-log-artifact-retention` input to trigger saving Claude’s execution log as a CI artifact. See the warning in README.md.
+- Added `thinking-log-artifact-retention` input to trigger saving Claude’s thinking as a CI artifact. See the warning in README.md.
 - Added input to configure [gh-pr-render] version.
 - Added opt-in `pr-review` subcommands, none of which are in the default `allowed-tools` list:
   - `resolve-any-thread`: mark an inline comment thread resolved.
