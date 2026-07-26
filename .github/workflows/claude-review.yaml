@@ -1,6 +1,6 @@
 # Generated from workflow-review.yaml — do not edit directly.
 
-name: Claude
+name: Claude Review
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]

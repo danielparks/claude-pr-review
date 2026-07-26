@@ -6,7 +6,7 @@
 
 # WARNING: This assumes that anybody who can assign issues is trusted.
 
-name: Claude
+name: Claude Response
 on:
   issues:
     types: [opened, edited, assigned]
