@@ -341,3 +341,34 @@ runs:
       env:
         URL: ${{ steps.log-upload.outputs.artifact-url }}
       run: echo "::notice::Execution log artifact ${URL}"
+
+    - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+    - name: Run conversation extractor
+      id: convo-extract
+      if: always() && steps.log-upload.outputs.artifact-url != ''
+      shell: bash
+      env:
+        OUTPUT: ${{ runner.temp }}/convos
+      run: |
+        mkdir -p "$OUTPUT"
+        uvx --from claude-conversation-extractor claude-extract \
+          --all --format html --detailed --output "$OUTPUT"
+
+    - name: Create artifact from execution log
+      id: convo-upload
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      if: always() && steps.convo-extract.outcome == 'success'
+      with:
+        name: convos.zip
+        path: ${{ runner.temp }}/convos
+        retention-days: ${{ inputs.execution-log-artifact-retention }}
+        archive: true
+        # We should not get here if the log did not exist:
+        if-no-files-found: error
+
+    - name: Output artifact URL
+      if: always() && steps.convo-upload.outcome == 'success'
+      shell: bash
+      env:
+        URL: ${{ steps.convo-upload.outputs.artifact-url }}
+      run: echo "::notice::Convo artifact ${URL}"
