@@ -32,7 +32,7 @@ import {
   minimizeReview,
   resolveReviewThread,
 } from "./lib/github.js";
-import { redactGitHubTokens } from "./lib/redact.js";
+import redact from "./lib/redact.js";
 
 class CliError extends Error {}
 
@@ -79,7 +79,7 @@ async function readBodyFile(path, { required }) {
     return "";
   }
 
-  const body = redactGitHubTokens(await readFile(path, "utf8"));
+  const body = redact(await readFile(path, "utf8"));
   if (required && !body.trim()) {
     fail(`--body-file (${path}) is empty`);
   }
