@@ -290,6 +290,7 @@ runs:
             || ''
           }}
       run: |
+        # Submit any review comments Claude queued but didn't post
         set -euo pipefail
         FLAGS=()
         if [[ -n "$DOWNGRADE_APPROVAL" ]]; then
@@ -307,6 +308,7 @@ runs:
         RETENTION: ${{ inputs.execution-log-artifact-retention }}
         SCRIPTS: ${{ github.action_path }}/scripts
       run: |
+        # Compress Claude’s execution log for upload if desired
         set -euo pipefail
         # Needs to be a number greater than 0.
         if [[ "$RETENTION" =~ ^[0-9]+$ && "$RETENTION" != 0 ]]; then
