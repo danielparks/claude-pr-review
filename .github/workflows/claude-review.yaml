@@ -40,3 +40,6 @@ jobs:
           # seems to win.
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # WARNING: this could expose secrets to the public. It *attempts* to
+          # redact GitHub tokens and Anthropic secrets, but no guarantees.
+          execution-log-artifact-retention: 7
