@@ -116,9 +116,9 @@ Version of the [gh-pr-render] tool to use. Defaults to the latest version at the
 
 ### `thinking-log-artifact-retention`
 
-How long to keep the Claude thinking log artifact in days.
+How long to keep the Claude thinking log artifact in days. `disabled` or `0` means not to create it.
 
-`disabled` or `0` means not to create it.
+The thinking log is an HTML file that contains some of Claude’s internal thoughts and all of its tool uses.
 
 > [!WARNING]
 > The log can contain repository secrets. Artifacts are available to the public on public repositories.
