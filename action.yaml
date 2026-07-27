@@ -312,6 +312,9 @@ runs:
 
     - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
       if: always() && steps.retention.outputs.days != ''
+      with:
+        # No Python project, so no files to hash into uv cache key.
+        cache-dependency-glob: ""
 
     - name: Run conversation extractor
       id: conversation-extract
