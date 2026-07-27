@@ -1,4 +1,4 @@
-name: pinact
+name: weekly-update
 
 on:
   schedule:
@@ -28,6 +28,10 @@ jobs:
         with:
           update: true
           skip_push: true
+      - name: Update pinned tool versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/update-pinned-tools
       - name: Open PR if changed
         run: |
           set -euo pipefail
@@ -36,9 +40,8 @@ jobs:
             exit 0
           fi
 
-          # shellcheck disable=SC2016
-          MESSAGE='`pinact run --update`.'
-          BRANCH="pinact-update"
+          MESSAGE='Weekly dependency update.'
+          BRANCH="weekly-update"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"

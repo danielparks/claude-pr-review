@@ -21,11 +21,22 @@ jobs:
     name: prek
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # Update via `scripts/update-pinned-tools`, not by hand.
+      ACTIONLINT_VERSION: v1.7.12
+      GHALINT_VERSION: v1.5.6
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - name: Cache actionlint
+        id: cache-actionlint
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /usr/local/bin/actionlint
+          key: actionlint-${{ runner.os }}-${{ env.ACTIONLINT_VERSION }}
       - name: Install actionlint
+        if: steps.cache-actionlint.outputs.cache-hit != 'true'
         working-directory: ${{ runner.temp }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -35,7 +46,7 @@ jobs:
 
           mkdir actionlint
           cd actionlint
-          gh release download \
+          gh release download "$ACTIONLINT_VERSION" \
             --repo rhysd/actionlint \
             --pattern 'actionlint_*_linux_amd64.tar.gz'
           gh attestation verify actionlint_*.tar.gz \
@@ -43,7 +54,14 @@ jobs:
 
           tar xzf actionlint_*.tar.gz
           cp actionlint /usr/local/bin
+      - name: Cache ghalint
+        id: cache-ghalint
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /usr/local/bin/ghalint
+          key: ghalint-${{ runner.os }}-${{ env.GHALINT_VERSION }}
       - name: Install ghalint
+        if: steps.cache-ghalint.outputs.cache-hit != 'true'
         working-directory: ${{ runner.temp }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -53,7 +71,7 @@ jobs:
 
           mkdir ghalint
           cd ghalint
-          gh release download \
+          gh release download "$GHALINT_VERSION" \
             -R suzuki-shunsuke/ghalint \
             -p 'ghalint_*_linux_amd64.tar.gz'
           gh attestation verify ghalint_*.tar.gz \

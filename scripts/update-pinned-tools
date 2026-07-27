@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+usage() {
+  cat >&2 <<EOF
+Usage: ${0##*/}
+
+Bump the pinned actionlint/ghalint versions in
+.github/workflows/pr-checks.yaml to their latest GitHub releases.
+
+This does not verify the new release's attestation itself. Bumping the
+version busts the actions/cache key in that workflow, so the next time
+pr-checks.yaml runs it will download the new release fresh and run
+\`gh attestation verify\` on it as usual.
+EOF
+}
+
+if [[ ${1:-} == --help ]]; then
+  usage; exit 0
+fi
+
+if ! command -v gh &>/dev/null; then
+  echo "Error: this script requires the gh CLI" >&2
+  exit 1
+fi
+
+FILE=.github/workflows/pr-checks.yaml
+
+update_version() {
+  local var="$1" repo="$2" current latest tmp
+
+  current=$(grep -oP "(?<=^\s{6}${var}: )\S+" "$FILE")
+  latest=$(gh api "repos/${repo}/releases/latest" --jq .tag_name)
+
+  if [[ "$current" == "$latest" ]]; then
+    return
+  fi
+
+  tmp=$(mktemp)
+  sed "s/${var}: ${current}/${var}: ${latest}/" "$FILE" > "$tmp"
+  mv "$tmp" "$FILE"
+  echo "Updated ${var}: ${current} -> ${latest}"
+}
+
+update_version ACTIONLINT_VERSION rhysd/actionlint
+update_version GHALINT_VERSION suzuki-shunsuke/ghalint
