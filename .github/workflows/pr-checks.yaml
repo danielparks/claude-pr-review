@@ -16,15 +16,20 @@ defaults:
   run:
     shell: bash
 
+# These would more naturally be separate jobs, but GitHub actions “bills” each
+# job separately and rounds up to the next minute, so four 10 second jobs “cost”
+# my account 4 action minutes.
 jobs:
-  prek:
-    name: prek
+  checks:
+    name: checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       # Update via `scripts/update-pinned-tools`, not by hand.
       ACTIONLINT_VERSION: v1.7.12
       GHALINT_VERSION: v1.5.6
+    permissions:
+      security-events: write # reporting lint failures
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -81,6 +86,7 @@ jobs:
           tar xzf ghalint_*.tar.gz
           cp ghalint /usr/local/bin
       - uses: j178/prek-action@bdca6f102f98e2b4c7029491a53dfd366469e33d # v2.0.4
+        if: ${{ !cancelled() }}
         with:
           # no-commit-to-branch fails on push to main.
           extra-args: >
@@ -89,27 +95,11 @@ jobs:
             --skip zizmor
             --skip no-commit-to-branch
 
-  typos:
-    name: typos
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
       - uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1
+        if: ${{ !cancelled() }}
 
-  zizmor:
-    name: zizmor
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      security-events: write # reporting lint failures
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
       - uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d # v0.5.6
+        if: ${{ !cancelled() }}
         with:
           inputs: .
           persona: pedantic
