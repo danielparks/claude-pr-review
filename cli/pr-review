@@ -153,7 +153,11 @@ const DOWNGRADE_FORCED_NOTE =
   "privilege fallback token, so the approval wasn't trusted as final._";
 
 /**
- * Post one already-claimed batch; mark it posted on success.
+ * Post one already-claimed batch.
+ *
+ * This does *not* mark the batch as posted in order to avoid conflating errors
+ * thrown while submitting with errors thrown while marking the batch. You must
+ * call `markPosted` after this if it succeeds.
  *
  * `forceDowngradeApproval` proactively turns a queued APPROVE into a COMMENT
  * before ever calling the API. Independent of that flag, an APPROVE that GitHub
@@ -167,8 +171,7 @@ async function submitClaimedBatch(claimedDir, { forceDowngradeApproval } = {}) {
   const pr = prNumberFromEnv();
 
   if (event === "COMMENT" && comments.length === 0 && !body) {
-    // Nothing worth posting (shouldn't normally happen) -- just tidy up.
-    await markPosted(claimedDir);
+    // Nothing worth posting (shouldn't normally happen).
     return { comments, event, skipped: true };
   }
 
@@ -207,7 +210,6 @@ async function submitClaimedBatch(claimedDir, { forceDowngradeApproval } = {}) {
       throw error;
     }
   }
-  await markPosted(claimedDir);
   return { comments, event: finalEvent, result };
 }
 
@@ -223,18 +225,34 @@ async function finalizeReview(event, body) {
   const claimedDir = await claim(queueRoot(), { create: true });
   await setReview(claimedDir, event, body);
 
+  let result;
   try {
-    return await submitClaimedBatch(claimedDir);
+    result = await submitClaimedBatch(claimedDir);
   } catch (error) {
     fail(
-      `${error.message}${apiErrorHint(error)}\n\n` +
+      `${error.message}${apiErrorHint(error)}\n` +
+        "\n" +
         `This batch is still queued at ${claimedDir}, and will be retried ` +
-        "automatically after your turn ends -- which will fail again the " +
+        "automatically after your turn ends -- which may fail again the " +
         "same way and fail the job. Fix the problem and try again; once a " +
         "corrected version has been submitted successfully, remove this " +
         `one with: pr-review discard-queue --dir ${claimedDir}`,
     );
   }
+
+  try {
+    await markPosted(claimedDir);
+  } catch (error) {
+    fail(
+      `Could not mark ${claimedDir} as posted: ${error}\n` +
+        "\n" +
+        "You can attempt to delete it with:\n" +
+        "\n" +
+        `    pr-review discard-queue --dir ${claimedDir}`,
+    );
+  }
+
+  return result;
 }
 
 async function cmdCommentReview(args) {
@@ -484,7 +502,6 @@ async function cmdSweep(args) {
 async function trySubmit(claimedDir, submitOpts) {
   try {
     await submitClaimedBatch(claimedDir, submitOpts);
-    return true;
   } catch (error) {
     console.error(
       `::error::Failed to submit queued review from ${claimedDir}: ` +
@@ -492,6 +509,18 @@ async function trySubmit(claimedDir, submitOpts) {
     );
     return false;
   }
+
+  try {
+    await markPosted(claimedDir);
+  } catch (error) {
+    console.error(
+      `::warning::Successfully submitted ${claimedDir}, but could not mark it ` +
+        `posted: ${error}`,
+    );
+    return false;
+  }
+
+  return true;
 }
 
 const COMMANDS = {
