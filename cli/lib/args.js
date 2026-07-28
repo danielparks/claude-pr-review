@@ -59,7 +59,9 @@ function placeholder(long, info) {
  */
 export function formatCommandHelp(command, definitions) {
   const lines = [`Usage: pr-review ${command ?? "<command>"} [options]`, ""];
-  for (const [key, { long, ...info }] of Object.entries(definitions)) {
+  for (const [key, { long, description, ...info }] of Object.entries(
+    definitions,
+  )) {
     const name = long ?? key;
     const notes = [];
     if (isRequired(info)) notes.push("required");
@@ -68,6 +70,7 @@ export function formatCommandHelp(command, definitions) {
       `  --${name}${placeholder(name, info)}` +
         (notes.length ? `  (${notes.join(", ")})` : ""),
     );
+    if (description) lines.push(`      ${description}`);
   }
   return lines.join("\n");
 }

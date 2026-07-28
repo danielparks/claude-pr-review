@@ -784,11 +784,13 @@ describe("pr-review CLI", () => {
     );
   });
 
-  it("--help with no command lists every command and exits 0", async () => {
+  it("--help with no command lists every command with a description and exits 0", async () => {
     const { stdout } = await run(["--help"]);
     expect(stdout).toMatch(/Usage: pr-review <command> \[options\]/);
-    expect(stdout).toMatch(/queue-inline-comment/);
-    expect(stdout).toMatch(/discard-queue/);
+    expect(stdout).toMatch(/queue-inline-comment\s+Queue an inline comment/);
+    expect(stdout).toMatch(
+      /discard-queue\s+Permanently remove a stuck claimed batch/,
+    );
   });
 
   it("running with no command at all also shows top-level help", async () => {
@@ -796,13 +798,14 @@ describe("pr-review CLI", () => {
     expect(stdout).toMatch(/Usage: pr-review <command> \[options\]/);
   });
 
-  it("<command> --help shows that command's flags and exits 0, without calling the API", async () => {
+  it("<command> --help shows that command's flags, descriptions, and exits 0, without calling the API", async () => {
     await withMockGitHub(async ({ requests }) => {
       const { stdout } = await run(["queue-inline-comment", "--help"]);
       expect(stdout).toMatch(
         /Usage: pr-review queue-inline-comment \[options\]/,
       );
       expect(stdout).toMatch(/--path PATH\s+\(required\)/);
+      expect(stdout).toMatch(/File path, relative to the repo root/);
       expect(stdout).toMatch(/--body-file BODY_FILE\s+\(required\)/);
       expect(requests).toHaveLength(0);
     });

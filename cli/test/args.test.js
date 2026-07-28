@@ -266,4 +266,25 @@ describe("formatCommandHelp()", () => {
       "Usage: pr-review <command> [options]\n",
     );
   });
+
+  it("adds an indented description line under a flag that has one", () => {
+    const help = formatCommandHelp("discard-queue", {
+      dir: { map: required, description: "Which batch to discard." },
+    });
+    expect(help).toBe(
+      [
+        "Usage: pr-review discard-queue [options]",
+        "",
+        "  --dir DIR  (required)",
+        "      Which batch to discard.",
+      ].join("\n"),
+    );
+  });
+
+  it("omits the description line entirely when a flag has none", () => {
+    const help = formatCommandHelp("sweep", {
+      forceDowngradeApproval: { type: "boolean", long: "downgrade-approval" },
+    });
+    expect(help.split("\n")).toHaveLength(3);
+  });
 });

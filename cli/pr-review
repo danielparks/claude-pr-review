@@ -109,11 +109,33 @@ async function cmdQueueInlineComment(args) {
   const [{ path, line, startLine, side, body }] = await getOptions(
     args,
     {
-      path: { map: required },
-      line: { map: positiveInt },
-      startLine: { long: "start-line" },
-      side: { map: oneOf("LEFT", "RIGHT"), default: "RIGHT" },
-      body: { long: "body-file", map: readBodyFile, required: true },
+      path: {
+        map: required,
+        description:
+          "File path, relative to the repo root, as it appears in the diff.",
+      },
+      line: {
+        map: positiveInt,
+        description:
+          "Line number in the file's new version (or old version, if --side LEFT) to attach the comment to. Must be part of the diff.",
+      },
+      startLine: {
+        long: "start-line",
+        description:
+          "Start of a multi-line comment range; the comment covers --start-line through --line. Omit for a single-line comment.",
+      },
+      side: {
+        map: oneOf("LEFT", "RIGHT"),
+        default: "RIGHT",
+        description:
+          "Which version of the diff --line/--start-line refer to: RIGHT is the new version, LEFT is the old.",
+      },
+      body: {
+        long: "body-file",
+        map: readBodyFile,
+        required: true,
+        description: "Path to a file containing the comment body.",
+      },
     },
     "queue-inline-comment",
   );
@@ -143,8 +165,17 @@ async function cmdReplyInlineComment(args) {
   const [{ commentId, body }] = await getOptions(
     args,
     {
-      commentId: { long: "comment-id", map: positiveInt },
-      body: { long: "body-file", map: readBodyFile, required: true },
+      commentId: {
+        long: "comment-id",
+        map: positiveInt,
+        description: "ID of the existing inline review comment to reply to.",
+      },
+      body: {
+        long: "body-file",
+        map: readBodyFile,
+        required: true,
+        description: "Path to a file containing the reply body.",
+      },
     },
     "reply-inline-comment",
   );
@@ -273,7 +304,14 @@ async function finalizeReview(event, body) {
 async function cmdCommentReview(args) {
   const [{ body }] = await getOptions(
     args,
-    { body: { long: "body-file", map: readBodyFile } },
+    {
+      body: {
+        long: "body-file",
+        map: readBodyFile,
+        description:
+          "Path to a file containing the top-level review body. Optional -- omit for an inline-comments-only review.",
+      },
+    },
     "comment-review",
   );
   const { comments, result, skipped } = await finalizeReview("COMMENT", body);
@@ -291,7 +329,14 @@ async function cmdCommentReview(args) {
 async function cmdApproveReview(args) {
   const [{ body }] = await getOptions(
     args,
-    { body: { long: "body-file", map: readBodyFile } },
+    {
+      body: {
+        long: "body-file",
+        map: readBodyFile,
+        description:
+          "Path to a file containing the top-level review body. Optional -- omit for an inline-comments-only approval.",
+      },
+    },
     "approve-review",
   );
   const { comments, event, result } = await finalizeReview("APPROVE", body);
@@ -310,7 +355,15 @@ async function cmdApproveReview(args) {
 async function cmdRequestChangesReview(args) {
   const [{ body }] = await getOptions(
     args,
-    { body: { long: "body-file", map: readBodyFile, required: true } },
+    {
+      body: {
+        long: "body-file",
+        map: readBodyFile,
+        required: true,
+        description:
+          "Path to a file containing the top-level review body, explaining what must change.",
+      },
+    },
     "request-changes-review",
   );
   const { comments, result } = await finalizeReview("REQUEST_CHANGES", body);
@@ -370,7 +423,13 @@ async function cmdListQueue(args) {
 async function cmdDiscardQueue(args) {
   const [{ dir }] = await getOptions(
     args,
-    { dir: { map: required } },
+    {
+      dir: {
+        map: required,
+        description:
+          "Path to the claimed batch directory to discard, exactly as printed by list-queue.",
+      },
+    },
     "discard-queue",
   );
 
@@ -395,7 +454,14 @@ async function cmdDiscardQueue(args) {
 async function doResolveThread(args, { checked, command }) {
   const [{ threadId }] = await getOptions(
     args,
-    { threadId: { long: "thread-id", map: required } },
+    {
+      threadId: {
+        long: "thread-id",
+        map: required,
+        description:
+          "GraphQL node ID of the review thread to resolve (shown by gh-pr-render above each thread).",
+      },
+    },
     command,
   );
 
@@ -441,7 +507,13 @@ function cmdResolveAnyThread(args) {
 async function doHideReview(args, { checked, command }) {
   const [{ reviewId }] = await getOptions(
     args,
-    { reviewId: { long: "review-id", map: positiveInt } },
+    {
+      reviewId: {
+        long: "review-id",
+        map: positiveInt,
+        description: "REST ID of the review to minimize (mark outdated).",
+      },
+    },
     command,
   );
 
@@ -493,7 +565,14 @@ function cmdHideAnyReview(args) {
 async function cmdSweep(args) {
   const [{ forceDowngradeApproval }] = await getOptions(
     args,
-    { forceDowngradeApproval: { type: "boolean", long: "downgrade-approval" } },
+    {
+      forceDowngradeApproval: {
+        type: "boolean",
+        long: "downgrade-approval",
+        description:
+          "Force any queued APPROVE to submit as COMMENT instead (with an explanatory note appended).",
+      },
+    },
     "sweep",
   );
 
@@ -557,27 +636,77 @@ async function trySubmit(claimedDir, submitOpts) {
 }
 
 const COMMANDS = {
-  init: cmdInit,
-  "queue-inline-comment": cmdQueueInlineComment,
-  "reply-inline-comment": cmdReplyInlineComment,
-  "comment-review": cmdCommentReview,
-  "approve-review": cmdApproveReview,
-  "request-changes-review": cmdRequestChangesReview,
-  "list-queue": cmdListQueue,
-  "discard-queue": cmdDiscardQueue,
-  "resolve-my-thread": cmdResolveMyThread,
-  "resolve-any-thread": cmdResolveAnyThread,
-  "hide-my-review": cmdHideMyReview,
-  "hide-any-review": cmdHideAnyReview,
-  sweep: cmdSweep,
+  init: {
+    handler: cmdInit,
+    description:
+      "Create the queue directory. Run once by action.yaml before Claude's turn starts -- Claude shouldn't call this.",
+  },
+  "queue-inline-comment": {
+    handler: cmdQueueInlineComment,
+    description:
+      "Queue an inline comment on disk. Nothing is posted until a review is finalized.",
+  },
+  "reply-inline-comment": {
+    handler: cmdReplyInlineComment,
+    description:
+      "Reply to an existing inline comment thread. Posts immediately.",
+  },
+  "comment-review": {
+    handler: cmdCommentReview,
+    description: "Submit everything queued as one grouped COMMENT review.",
+  },
+  "approve-review": {
+    handler: cmdApproveReview,
+    description: "Submit everything queued as one grouped APPROVE review.",
+  },
+  "request-changes-review": {
+    handler: cmdRequestChangesReview,
+    description:
+      "Submit everything queued as one grouped REQUEST_CHANGES review.",
+  },
+  "list-queue": {
+    handler: cmdListQueue,
+    description: "Show every batch currently in the queue, in any state.",
+  },
+  "discard-queue": {
+    handler: cmdDiscardQueue,
+    description:
+      "Permanently remove a stuck claimed batch without submitting it.",
+  },
+  "resolve-my-thread": {
+    handler: cmdResolveMyThread,
+    description: "Resolve an inline-comment thread you started.",
+  },
+  "resolve-any-thread": {
+    handler: cmdResolveAnyThread,
+    description:
+      "Resolve any inline-comment thread, without checking who started it.",
+  },
+  "hide-my-review": {
+    handler: cmdHideMyReview,
+    description: "Minimize (mark outdated) a review you authored.",
+  },
+  "hide-any-review": {
+    handler: cmdHideAnyReview,
+    description: "Minimize any review, without checking who authored it.",
+  },
+  sweep: {
+    handler: cmdSweep,
+    description:
+      "Post anything still queued after Claude's turn ends. Run automatically by action.yaml -- Claude shouldn't call this.",
+  },
 };
 
 function formatTopLevelHelp() {
+  const names = Object.keys(COMMANDS);
+  const width = Math.max(...names.map((name) => name.length));
   return [
     "Usage: pr-review <command> [options]",
     "",
     "Commands:",
-    ...Object.keys(COMMANDS).map((name) => `  ${name}`),
+    ...names.map(
+      (name) => `  ${name.padEnd(width)}  ${COMMANDS[name].description}`,
+    ),
     "",
     "Run 'pr-review <command> --help' for details on a specific command.",
   ].join("\n");
@@ -590,14 +719,14 @@ async function main() {
     return;
   }
 
-  const handler = COMMANDS[command];
-  if (!handler) {
+  const entry = COMMANDS[command];
+  if (!entry) {
     fail(
       `Unknown command: ${command}. Expected one of: ` +
         Object.keys(COMMANDS).join(", "),
     );
   }
-  await handler(rest);
+  await entry.handler(rest);
 }
 
 main().catch((error) => {
