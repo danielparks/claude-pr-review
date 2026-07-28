@@ -1,0 +1,32 @@
+# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+version: 2
+updates:
+  # GitHub actions are updated with `pinact` so that the example workflows are
+  # updated along with the real workflows and the action itself.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 30
+    # Security updates only:
+    open-pull-requests-limit: 0
+    groups:
+      github-actions:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/cli"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 30
+    # Security updates only:
+    open-pull-requests-limit: 0
+    groups:
+      npm-dependencies:
+        applies-to: security-updates
+        patterns:
+          - "*"
