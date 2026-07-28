@@ -208,6 +208,51 @@ export async function createReply(
   return { id: data.id, html_url: data.html_url };
 }
 
+/**
+ * Fetches every top-level (issue) comment on a PR, oldest first.
+ *
+ * PRs share GitHub's issue comments API, so this is the same endpoint used
+ * for plain issues. Pages through the full history rather than stopping
+ * early, since the caller needs to find one comment by marker text and
+ * that comment could be old.
+ */
+export async function listIssueComments(token, owner, repo, pullNumber) {
+  const perPage = 100;
+  const all = [];
+  for (let page = 1; ; page++) {
+    const data = await request(
+      token,
+      "GET",
+      `/repos/${owner}/${repo}/issues/${pullNumber}/comments?per_page=${perPage}&page=${page}`,
+    );
+    all.push(...data);
+    if (data.length < perPage) break;
+  }
+  return all;
+}
+
+/** Posts a new top-level (issue) comment on a PR. */
+export async function createIssueComment(token, owner, repo, pullNumber, body) {
+  const data = await request(
+    token,
+    "POST",
+    `/repos/${owner}/${repo}/issues/${pullNumber}/comments`,
+    { body },
+  );
+  return { id: data.id, html_url: data.html_url };
+}
+
+/** Overwrites the body of an existing top-level (issue) comment. */
+export async function updateIssueComment(token, owner, repo, commentId, body) {
+  const data = await request(
+    token,
+    "PATCH",
+    `/repos/${owner}/${repo}/issues/comments/${commentId}`,
+    { body },
+  );
+  return { id: data.id, html_url: data.html_url };
+}
+
 /** A human-readable hint appended to error messages surfaced to Claude. */
 export function apiErrorHint(error) {
   const status = error instanceof GitHubApiError ? error.status : undefined;

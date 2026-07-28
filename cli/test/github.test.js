@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   apiErrorHint,
+  createIssueComment,
   createReply,
   createReview,
   getHeadSha,
@@ -8,8 +9,10 @@ import {
   getThreadFirstCommentAuthor,
   getViewerLogin,
   isApprovalRejected,
+  listIssueComments,
   minimizeReview,
   resolveReviewThread,
+  updateIssueComment,
 } from "../lib/github.js";
 import {
   withMockGitHub,
@@ -209,6 +212,79 @@ describe("github", () => {
           html_url: "https://example/pulls/5/comments/222",
         });
         expect(requests[0].body).toEqual({ body: "thanks, fixed" });
+      },
+    );
+  });
+
+  it("listIssueComments() returns comments from a single page", async () => {
+    await withMockGitHub(
+      responses.GET_issue_comments(5, [
+        { id: 1, user: { login: "someone" }, body: "hi" },
+        { id: 2, user: { login: "claude[bot]" }, body: "bye" },
+      ]),
+
+      async () => {
+        expect(await listIssueComments(...TOKEN_ORG_REPO, 5)).toEqual([
+          { id: 1, user: { login: "someone" }, body: "hi" },
+          { id: 2, user: { login: "claude[bot]" }, body: "bye" },
+        ]);
+      },
+    );
+  });
+
+  it("listIssueComments() pages through results until a short page", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      id: i,
+      body: `comment ${i}`,
+    }));
+    const page2 = [{ id: 100, body: "comment 100" }];
+
+    await withMockGitHub(
+      route("GET", `/issues/5/comments`, { body: page1 }, { body: page2 }),
+
+      async ({ requests }) => {
+        const comments = await listIssueComments(...TOKEN_ORG_REPO, 5);
+        expect(comments).toHaveLength(101);
+        expect(comments.at(-1)).toEqual({ id: 100, body: "comment 100" });
+
+        const issueRequests = filterByUrlEnd(requests, "&page=1").concat(
+          filterByUrlEnd(requests, "&page=2"),
+        );
+        expect(issueRequests).toHaveLength(2);
+      },
+    );
+  });
+
+  it("createIssueComment() posts a top-level comment and returns id/html_url", async () => {
+    await withMockGitHub(
+      responses.POST_issue_comment(5, 333),
+
+      async ({ requests }) => {
+        expect(
+          await createIssueComment(...TOKEN_ORG_REPO, 5, "sticky content"),
+        ).toEqual({
+          id: 333,
+          html_url: "https://example/issues/5/comments/333",
+        });
+        const [issueRequest] = filterByUrlEnd(requests, "/issues/5/comments");
+        expect(issueRequest.body).toEqual({ body: "sticky content" });
+      },
+    );
+  });
+
+  it("updateIssueComment() patches an existing comment and returns id/html_url", async () => {
+    await withMockGitHub(
+      responses.PATCH_issue_comment(333),
+
+      async ({ requests }) => {
+        expect(
+          await updateIssueComment(...TOKEN_ORG_REPO, 333, "updated content"),
+        ).toEqual({
+          id: 333,
+          html_url: "https://example/issues/comments/333",
+        });
+        const [issueRequest] = filterByUrlEnd(requests, "/issues/comments/333");
+        expect(issueRequest.body).toEqual({ body: "updated content" });
       },
     );
   });

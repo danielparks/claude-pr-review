@@ -121,4 +121,20 @@ export const responses = {
         html_url: `https://example/pulls/${pr}/comments/${new_id}`,
       },
     }),
+  GET_issue_comments: (pr, comments) =>
+    route("GET", `/issues/${pr}/comments`, { body: comments }),
+  POST_issue_comment: (pr, new_id) =>
+    route("POST", `/issues/${pr}/comments$`, {
+      body: {
+        id: new_id,
+        html_url: `https://example/issues/${pr}/comments/${new_id}`,
+      },
+    }),
+  PATCH_issue_comment: (comment_id) =>
+    route("PATCH", `/issues/comments/${comment_id}$`, {
+      body: {
+        id: comment_id,
+        html_url: `https://example/issues/comments/${comment_id}`,
+      },
+    }),
 };

@@ -123,6 +123,14 @@ List of additional tools to allow Claude to use, one per line. Added to `allowed
 
 This is useful if you just want to add a tool to the default tool list. In particular, see the [“Opt-in tools”][opt-in-tools] section of [`cli/README.md`] for `pr-review` subcommands that are deliberately left out of the default list.
 
+### `sticky-comment-template`
+
+Template body for a single "sticky" top-level PR comment that Claude can keep current across the PR's lifetime (e.g. an overall status summary) instead of leaving a new comment on every review — see [`update-sticky-comment`][opt-in-tools] in `cli/README.md`. Empty (default) disables the feature entirely: `update-sticky-comment` isn't added to `allowed-tools`, and nothing creates the comment.
+
+When set, this is used only as a fallback: if Claude's turn never creates or updates the sticky comment itself (most commonly the very first run on a PR, if Claude's step fails before it gets there), the sweep step that always runs after Claude creates it from this template instead of leaving nothing behind. Once Claude successfully calls `update-sticky-comment`, its own content replaces this on every subsequent run — this template is never used to overwrite existing content.
+
+Pair this with `additional-prompt` describing when and how Claude should call `update-sticky-comment`.
+
 ### `gh-pr-render-version`
 
 Version of the [gh-pr-render] tool to use. Defaults to the latest version at the time of this action’s release.

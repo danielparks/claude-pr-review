@@ -226,6 +226,93 @@ describe("pr-review CLI", () => {
     },
   );
 
+  // getViewerLogin() is a GraphQL call; reused from the resolve-my-thread
+  // tests further down (function declarations hoist within this describe).
+  it("update-sticky-comment creates a new comment when none exists yet", async () => {
+    await withMockGitHub(
+      viewerRoute("claude[bot]"),
+      responses.GET_issue_comments(5, [
+        { id: 1, user: { login: "someone" }, body: "unrelated comment" },
+      ]),
+      responses.POST_issue_comment(5, 555),
+
+      async ({ requests }) => {
+        const { stdout } = await run([
+          "update-sticky-comment",
+          "--body-file",
+          await bodyFile("current status"),
+        ]);
+        expect(stdout).toMatch(/Created sticky comment/);
+
+        const [issueRequest] = filterByUrlEnd(requests, "/issues/5/comments");
+        expect(issueRequest.body.body).toMatch(/current status/);
+        expect(issueRequest.body.body).toMatch(
+          /<!-- pr-review:sticky-comment -->/,
+        );
+      },
+    );
+  });
+
+  it("update-sticky-comment updates the existing marked comment authored by the authenticated user", async () => {
+    await withMockGitHub(
+      viewerRoute("claude[bot]"),
+      responses.GET_issue_comments(5, [
+        { id: 1, user: { login: "someone" }, body: "unrelated comment" },
+        {
+          id: 2,
+          user: { login: "claude[bot]" },
+          body: "<!-- pr-review:sticky-comment -->\nold status",
+        },
+      ]),
+      responses.PATCH_issue_comment(2),
+
+      async ({ requests }) => {
+        const { stdout } = await run([
+          "update-sticky-comment",
+          "--body-file",
+          await bodyFile("new status"),
+        ]);
+        expect(stdout).toMatch(/Updated sticky comment/);
+
+        const [issueRequest] = filterByUrlEnd(requests, "/issues/comments/2");
+        expect(issueRequest.body.body).toMatch(/new status/);
+      },
+    );
+  });
+
+  it("update-sticky-comment ignores a marked comment authored by someone else", async () => {
+    await withMockGitHub(
+      viewerRoute("claude[bot]"),
+      responses.GET_issue_comments(5, [
+        {
+          id: 3,
+          user: { login: "someone-else" },
+          body: "<!-- pr-review:sticky-comment -->\nspoofed",
+        },
+      ]),
+      responses.POST_issue_comment(5, 556),
+
+      async ({ requests }) => {
+        const { stdout } = await run([
+          "update-sticky-comment",
+          "--body-file",
+          await bodyFile("real status"),
+        ]);
+        expect(stdout).toMatch(/Created sticky comment/);
+        expect(filterByUrlEnd(requests, "/issues/comments/3")).toHaveLength(0);
+      },
+    );
+  });
+
+  it("update-sticky-comment requires --body-file", async () => {
+    await withMockGitHub(async ({ requests }) => {
+      await expect(run(["update-sticky-comment"])).rejects.toThrow(
+        /--body-file is required/,
+      );
+      expect(requests).toHaveLength(0);
+    });
+  });
+
   it("approve-review posts an APPROVE event with no comments queued", async () => {
     await withMockGitHub(
       responses.GET_pull(5, "deadbeef"),
@@ -688,6 +775,82 @@ describe("pr-review CLI", () => {
         expect(reviewRequest.body.event).toBe("COMMENT");
         expect(reviewRequest.body.body).toContain("ship it");
         expect(reviewRequest.body.body).toContain("didn't complete cleanly");
+      },
+    );
+  });
+
+  it("sweep --sticky-template-file creates the sticky comment when none exists yet", async () => {
+    await withMockGitHub(
+      viewerRoute("claude[bot]"),
+      responses.GET_issue_comments(5, []),
+      responses.POST_issue_comment(5, 777),
+
+      async ({ requests }) => {
+        const { stdout } = await run([
+          "sweep",
+          "--sticky-template-file",
+          await bodyFile("Review in progress..."),
+        ]);
+        expect(stdout).toMatch(/Created sticky comment from template/);
+
+        const [issueRequest] = filterByUrlEnd(requests, "/issues/5/comments");
+        expect(issueRequest.body.body).toMatch(/Review in progress/);
+        expect(issueRequest.body.body).toMatch(
+          /<!-- pr-review:sticky-comment -->/,
+        );
+      },
+    );
+  });
+
+  it("sweep --sticky-template-file leaves an existing sticky comment alone", async () => {
+    await withMockGitHub(
+      viewerRoute("claude[bot]"),
+      responses.GET_issue_comments(5, [
+        {
+          id: 4,
+          user: { login: "claude[bot]" },
+          body: "<!-- pr-review:sticky-comment -->\nreal findings",
+        },
+      ]),
+
+      async ({ requests }) => {
+        const { stdout } = await run([
+          "sweep",
+          "--sticky-template-file",
+          await bodyFile("Review in progress..."),
+        ]);
+        expect(stdout).toMatch(/Nothing to sweep/);
+        expect(
+          requests.some(
+            (r) => r.url.includes("/issues/") && r.method !== "GET",
+          ),
+        ).toBe(false);
+      },
+    );
+  });
+
+  it("sweep without --sticky-template-file never touches issue comments", async () => {
+    await withMockGitHub(async ({ requests }) => {
+      const { stdout } = await run(["sweep"]);
+      expect(stdout).toMatch(/Nothing to sweep/);
+      expect(requests).toHaveLength(0);
+    });
+  });
+
+  it("sweep warns but doesn't fail the job if ensuring the sticky comment fails", async () => {
+    await withMockGitHub(
+      viewerRoute("claude[bot]"),
+      responses.GET_issue_comments(5, []),
+
+      async ({ requests }) => {
+        const { stdout, stderr } = await run([
+          "sweep",
+          "--sticky-template-file",
+          "/nonexistent/template.txt",
+        ]);
+        expect(stdout).toMatch(/Nothing to sweep/);
+        expect(stderr).toMatch(/::warning::Could not ensure sticky comment/);
+        expect(filterByUrlEnd(requests, "/issues/5/comments")).toHaveLength(0);
       },
     );
   });
