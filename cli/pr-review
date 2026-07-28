@@ -11,7 +11,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getOptions, oneOf, positiveInt, required } from "./lib/args.js";
-import { fail } from "./lib/util.js";
+import { countLines, fail } from "./lib/util.js";
 import {
   claim,
   cleanup,
@@ -307,7 +307,9 @@ async function cmdListQueue() {
   for (const { dir, state, comments, body, event } of batches) {
     console.log(
       `${dir} [${state}] ${event}: ${comments.length} inline comment(s)` +
-        (body ? "" : ", no top-level body"),
+        (body
+          ? `, ${countLines(body)} line top-level body`
+          : ", no top-level body"),
     );
     for (const comment of comments) {
       console.log(formatQueuedComment(comment));
