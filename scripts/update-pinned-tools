@@ -31,7 +31,17 @@ FILE=.github/workflows/pr-checks.yaml
 update_version() {
   local var="$1" repo="$2" current latest tmp
 
-  current=$(grep -oP "(?<=^\s{6}${var}: )\S+" "$FILE")
+  current=$(awk '/^ +'"${var}"': / { print $2 }' "$FILE")
+  if [[ -z "$current" ]] ; then
+    echo "Variable ${var} not found in ${FILE}" >&2
+    exit 1
+  fi
+
+  if [[ "$current" =~ [[:space:]] ]] ; then
+    echo "Found multiple copies of ${var} in ${FILE}" >&2
+    exit 1
+  fi
+
   latest=$(gh api "repos/${repo}/releases/latest" --jq .tag_name)
 
   if [[ "$current" == "$latest" ]]; then
@@ -39,6 +49,7 @@ update_version() {
   fi
 
   tmp=$(mktemp)
+  # $current contains . but it will likely match correctly because of $var
   sed "s/${var}: ${current}/${var}: ${latest}/" "$FILE" > "$tmp"
   mv "$tmp" "$FILE"
   echo "Updated ${var}: ${current} -> ${latest}"
