@@ -102,6 +102,8 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(pr-review queue-inline-comment:*)
     Bash(pr-review reply-inline-comment:*)
     Bash(pr-review comment-review:*)
+    Bash(pr-review list-queue:*)
+    Bash(pr-review discard-queue:*)
 
 <!-- /default:allowed-tools -->
 
@@ -137,6 +139,7 @@ This action bundles its own CLI tool, [`cli/pr-review`], that `action.yaml` puts
 - `pr-review queue-inline-comment` queues an inline comment on disk. Nothing is posted to GitHub until `comment-review` is called.
 - `pr-review comment-review` posts everything queued by `queue-inline-comment`, plus an optional top-level body, as a single grouped comment review. Claude doesn't have to call this itself — `action.yaml` runs it automatically after Claude's turn ends if anything is still queued.
 - `pr-review reply-inline-comment` replies to an existing inline comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
+- `pr-review list-queue` and `pr-review discard-queue --dir PATH` let Claude recover if a submission fails for a reason that won't change on retry (e.g. GitHub rejecting an inline comment's line number): after fixing the problem and resubmitting successfully, Claude can discard the original failed batch so the automatic post-turn sweep doesn't keep retrying — and failing on — it.
 
 [anthropics/claude-code-action]'s built-in inline-comment tool posts each inline comment through GitHub's single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.
 

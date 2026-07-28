@@ -37,6 +37,14 @@ An `APPROVE` review gets special handling because it might allow a merge. If the
 
 Separately, any `APPROVE` review GitHub itself rejects because the token isn't permitted to approve is automatically retried as a `COMMENT`, again with a note. `REQUEST_CHANGES` never gets downgraded by either mechanism — see the danger note below for why.
 
+### Recovering a claimed batch that will never succeed
+
+A `comments.claimed-*/` batch is meant to capture "we don't know what happened" — a crash, a network drop — so `sweep` can safely retry it later with the exact same content. But not every submission failure is like that: if GitHub rejects the request itself (say, an inline comment's line number isn't part of the diff), the claimed batch is left behind in exactly the same state as a genuine crash, and retrying it will just fail the same way again, every time `sweep` runs, indefinitely failing the job.
+
+`pr-review list-queue` shows every batch currently in the queue, in any state, including stuck claimed ones and what they contain. `pr-review discard-queue --dir PATH` permanently removes one claimed batch (refusing anything that isn't a `comments.claimed-*/` directory directly inside the queue root).
+
+This isn't documented in `action.yaml`'s default prompt — deliberately, since it only matters on the rare submission failure, and there's no reason to spend prompt tokens on it every run. Instead, when `comment-review`/`approve-review`/`request-changes-review` fails, `finalizeReview` in `pr-review` catches it and appends the exact recovery command -- `pr-review discard-queue --dir <that batch's path>` -- to the error text Claude sees, along with a note that the batch will otherwise be retried (and fail again the same way) by `sweep`. `list-queue` exists mainly for a human, or for Claude, debugging a queue directory from outside that one failure (e.g. multiple stuck batches from separate failed attempts).
+
 ## Opt-in tools
 
 A few `pr-review` subcommands are deliberately left out of the default `allowed-tools` list in `action.yaml`. They're real capabilities some workflows want, but they change what kind of thing Claude _is_ in a PR — from "leaves comments" to "affects merge state" — so they're opt-in only, enabled by adding the relevant line(s) below to the `additional-allowed-tools` input, and should be paired with your own `additional-prompt` text describing when Claude should use them.

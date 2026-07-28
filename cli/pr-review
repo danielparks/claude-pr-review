@@ -9,13 +9,16 @@
 // real environment. See ./README.md for more information.
 
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { getOptions, oneOf, positiveInt, required } from "./lib/args.js";
 import { fail } from "./lib/util.js";
 import {
   claim,
   cleanup,
+  discardClaimed,
   initQueue,
   listClaimed,
+  listQueue,
   markPosted,
   queueComment,
   queueRoot,
@@ -220,7 +223,18 @@ async function finalizeReview(event, body) {
   const claimedDir = await claim(queueRoot(), { create: true });
   await setReview(claimedDir, event, body);
 
-  return await withApiError(() => submitClaimedBatch(claimedDir));
+  try {
+    return await submitClaimedBatch(claimedDir);
+  } catch (error) {
+    fail(
+      `${error.message}${apiErrorHint(error)}\n\n` +
+        `This batch is still queued at ${claimedDir}, and will be retried ` +
+        "automatically after your turn ends -- which will fail again the " +
+        "same way and fail the job. Fix the problem and try again; once a " +
+        "corrected version has been submitted successfully, remove this " +
+        `one with: pr-review discard-queue --dir ${claimedDir}`,
+    );
+  }
 }
 
 async function cmdCommentReview(args) {
@@ -264,6 +278,69 @@ async function cmdRequestChangesReview(args) {
   console.log(
     `Submitted REQUEST_CHANGES review with ${comments.length} inline comment(s): ${result.html_url}`,
   );
+}
+
+function formatQueuedComment(comment) {
+  const range =
+    comment.start_line !== undefined
+      ? `${comment.start_line}-${comment.line}`
+      : `${comment.line}`;
+  const firstLine = comment.body.split("\n")[0];
+  return `  ${comment.path}:${range}: ${firstLine}`;
+}
+
+/**
+ * Show every batch currently in the queue, in any state, so Claude can spot
+ * (and then remove with `discard-queue`) a claimed batch that's stuck
+ * retrying a submission that will never succeed -- e.g. one GitHub rejected
+ * for an invalid inline comment line number, after a corrected batch has
+ * already been submitted successfully in its place.
+ */
+async function cmdListQueue() {
+  const root = queueRoot();
+  const batches = await listQueue(root);
+  if (batches.length === 0) {
+    console.log(`Nothing queued (${root}).`);
+    return;
+  }
+
+  for (const { dir, state, comments, body, event } of batches) {
+    console.log(
+      `${dir} [${state}] ${event}: ${comments.length} inline comment(s)` +
+        (body ? "" : ", no top-level body"),
+    );
+    for (const comment of comments) {
+      console.log(formatQueuedComment(comment));
+    }
+  }
+}
+
+/**
+ * Permanently remove a claimed batch without submitting it. Meant for a
+ * batch `list-queue` shows stuck after a submission failed for a reason
+ * that won't change on retry (e.g. an invalid line number) -- once the
+ * corrected content has been submitted successfully some other way, this
+ * stops `sweep` from retrying the original and failing the job.
+ *
+ * Only accepts a directory directly inside the queue root, as printed by
+ * `list-queue`, so a crafted path can't be used to delete something else.
+ */
+async function cmdDiscardQueue(args) {
+  const [{ dir }] = await getOptions(args, {
+    dir: { map: required },
+  });
+
+  const root = queueRoot();
+  const resolved = path.resolve(dir);
+  if (path.dirname(resolved) !== path.resolve(root)) {
+    fail(
+      `--dir must be a batch directory directly inside the queue root ` +
+        `(${root}), as printed by 'list-queue'. Got: ${dir}`,
+    );
+  }
+
+  await discardClaimed(resolved);
+  console.log(`Discarded ${resolved}.`);
 }
 
 /**
@@ -422,6 +499,8 @@ const COMMANDS = {
   "comment-review": cmdCommentReview,
   "approve-review": cmdApproveReview,
   "request-changes-review": cmdRequestChangesReview,
+  "list-queue": cmdListQueue,
+  "discard-queue": cmdDiscardQueue,
   "resolve-my-thread": cmdResolveMyThread,
   "resolve-any-thread": cmdResolveAnyThread,
   "hide-my-review": cmdHideMyReview,

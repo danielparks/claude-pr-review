@@ -4,8 +4,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   claim,
+  discardClaimed,
   initQueue,
   listClaimed,
+  listQueue,
   markPosted,
   queueComment,
   readBatch,
@@ -143,5 +145,71 @@ describe("queue", () => {
 
   it("listClaimed() returns an empty list when the queue dir doesn't exist yet", async () => {
     expect(await listClaimed(path.join(root, "never-created"))).toEqual([]);
+  });
+
+  it("listQueue() returns an empty list when the queue dir doesn't exist yet", async () => {
+    expect(await listQueue(path.join(root, "never-created"))).toEqual([]);
+  });
+
+  it("listQueue() reports open, claimed, and posted batches with their contents", async () => {
+    await queueComment(root, comment("posted.txt"));
+    const toPost = await claim(root);
+    await setReview(toPost, "COMMENT", "posted body");
+    const posted = await markPosted(toPost);
+
+    await queueComment(root, comment("stuck.txt"));
+    const stuck = await claim(root);
+    await setReview(stuck, "APPROVE", "stuck body");
+
+    await queueComment(root, comment("open.txt"));
+
+    const batches = await listQueue(root);
+    expect(batches).toEqual([
+      {
+        dir: path.join(root, "comments"),
+        state: "open",
+        comments: [comment("open.txt")],
+        body: "",
+        event: "COMMENT",
+      },
+      {
+        dir: stuck,
+        state: "claimed",
+        comments: [comment("stuck.txt")],
+        body: "stuck body",
+        event: "APPROVE",
+      },
+      {
+        dir: posted,
+        state: "posted",
+        comments: [comment("posted.txt")],
+        body: "posted body",
+        event: "COMMENT",
+      },
+    ]);
+  });
+
+  it("discardClaimed() removes a claimed batch", async () => {
+    await queueComment(root, comment("a.txt"));
+    const claimed = await claim(root);
+
+    await discardClaimed(claimed);
+    expect(await listClaimed(root)).toEqual([]);
+  });
+
+  it("discardClaimed() refuses to remove a non-claimed directory", async () => {
+    await queueComment(root, comment("a.txt"));
+    const openDir = path.join(root, "comments");
+
+    await expect(discardClaimed(openDir)).rejects.toThrow(
+      /Not a claimed batch directory/,
+    );
+    expect(await readdir(openDir)).toHaveLength(1);
+  });
+
+  it("discardClaimed() fails on a directory that doesn't exist", async () => {
+    await expect(
+      discardClaimed(path.join(root, "comments.claimed-nope")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

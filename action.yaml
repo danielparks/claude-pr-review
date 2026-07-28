@@ -96,6 +96,8 @@ inputs:
       Bash(pr-review queue-inline-comment:*)
       Bash(pr-review reply-inline-comment:*)
       Bash(pr-review comment-review:*)
+      Bash(pr-review list-queue:*)
+      Bash(pr-review discard-queue:*)
   additional-allowed-tools:
     description: >
       List of additional tools to allow Claude to use, one per line. Added to

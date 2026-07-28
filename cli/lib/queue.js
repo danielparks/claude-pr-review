@@ -163,6 +163,56 @@ export async function listClaimed(root) {
   }
 }
 
+function classify(entry) {
+  if (entry === "comments") return "open";
+  if (entry.startsWith("comments.claimed-")) return "claimed";
+  if (entry.startsWith("comments.posted-")) return "posted";
+  return null;
+}
+
+/**
+ * List every batch in the queue root, in any state, for the `list-queue`
+ * command -- e.g. to find a claimed batch stuck retrying a submission that
+ * will never succeed (a bad line number, say) so it can be removed with
+ * `discardClaimed()` before `sweep` retries it again and fails the job.
+ */
+export async function listQueue(root) {
+  let entries;
+  try {
+    entries = await readdir(root);
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+
+  const batches = [];
+  for (const entry of entries.sort()) {
+    const state = classify(entry);
+    if (!state) continue;
+    const dir = path.join(root, entry);
+    batches.push({ dir, state, ...(await readBatch(dir)) });
+  }
+  return batches;
+}
+
+/**
+ * Permanently discard a claimed batch without submitting it (the
+ * `discard-queue` command). Meant for a batch that failed with an error
+ * that will never succeed on retry (e.g. GitHub rejecting an inline
+ * comment's line number as invalid) -- once a corrected batch has been
+ * submitted successfully, the original claimed batch would otherwise sit
+ * around and get retried, identically failing, by `sweep`.
+ *
+ * Refuses to touch anything that isn't a `comments.claimed-*` directory, so
+ * a typo can't delete an unrelated path.
+ */
+export async function discardClaimed(dir) {
+  if (!path.basename(dir).startsWith("comments.claimed-")) {
+    throw new Error(`Not a claimed batch directory: ${dir}`);
+  }
+  await rm(dir, { recursive: true });
+}
+
 /** Best-effort cleanup of a posted batch. Failure here is not fatal. */
 export async function cleanup(dir) {
   await rm(dir, { recursive: true, force: true });

@@ -639,4 +639,148 @@ describe("pr-review CLI", () => {
       },
     );
   });
+
+  it("list-queue reports nothing queued when the queue is empty", async () => {
+    const { stdout } = await run(["list-queue"]);
+    expect(stdout).toMatch(/Nothing queued/);
+  });
+
+  // Rather than hand-writing a comment.json + directory layout to fake a
+  // claimed batch (which would silently drift from reality if that format
+  // ever changes), these get a *real* stuck claimed batch the same way one
+  // arises in production: a comment-review call that GitHub rejects.
+  function rejectedReviewRoute() {
+    return route("POST", "/pulls/5/reviews$", {
+      status: 422,
+      body: {
+        message: "Unprocessable Entity",
+        errors: ["line must be part of the diff"],
+      },
+    });
+  }
+
+  async function failCommentReviewAndGetClaimedDir() {
+    await runQueueInlineComment(
+      "bad.js",
+      "999",
+      await bodyFile("invalid line"),
+    );
+    let failureMessage;
+    try {
+      await run(["comment-review"]);
+      expect.unreachable("comment-review should have failed");
+    } catch (error) {
+      failureMessage = error.message;
+    }
+    const [, claimedDir] =
+      failureMessage.match(/discard-queue --dir (\S+)/) ?? [];
+    expect(claimedDir).toBeDefined();
+    return { claimedDir, failureMessage };
+  }
+
+  it("list-queue reports open and claimed batches with their comments", async () => {
+    await withMockGitHub(
+      responses.GET_pull(5, "deadbeef"),
+      rejectedReviewRoute(),
+
+      async () => {
+        const { claimedDir } = await failCommentReviewAndGetClaimedDir();
+        await runQueueInlineComment(
+          "open.js",
+          "3",
+          await bodyFile("still drafting"),
+        );
+
+        const { stdout } = await run(["list-queue"]);
+        expect(stdout).toMatch(/\[open\]/);
+        expect(stdout).toMatch(/open\.js:3: still drafting/);
+        expect(stdout).toContain(`${claimedDir} [claimed]`);
+        expect(stdout).toMatch(/bad\.js:999: invalid line/);
+      },
+    );
+  });
+
+  it("discard-queue removes a claimed batch so sweep no longer retries it", async () => {
+    await withMockGitHub(
+      responses.GET_pull(5, "deadbeef"),
+      rejectedReviewRoute(),
+
+      async ({ requests }) => {
+        const { claimedDir } = await failCommentReviewAndGetClaimedDir();
+
+        const { stdout } = await run(["discard-queue", "--dir", claimedDir]);
+        expect(stdout).toContain(`Discarded ${claimedDir}`);
+        await expect(access(claimedDir)).rejects.toThrow("ENOENT");
+
+        const sweep = await run(["sweep"]);
+        expect(sweep.stdout).toMatch(/Nothing to sweep/);
+        // Only the one failed attempt -- sweep found nothing left to retry.
+        expect(filterByUrlEnd(requests, "/reviews")).toHaveLength(1);
+      },
+    );
+  });
+
+  it("discard-queue refuses to remove a non-claimed directory", async () => {
+    await runQueueInlineComment("a.js", "1", await bodyFile("keep me"));
+    const openDir = path.join(queueDir, "comments");
+
+    await expect(run(["discard-queue", "--dir", openDir])).rejects.toThrow(
+      /Not a claimed batch directory/,
+    );
+    expect(await readdir(openDir)).toHaveLength(1);
+  });
+
+  it("discard-queue refuses a path outside the queue root", async () => {
+    const outside = path.join(workDir, "comments.claimed-1-999-stuck");
+
+    await expect(run(["discard-queue", "--dir", outside])).rejects.toThrow(
+      /must be a batch directory directly inside the queue root/,
+    );
+  });
+
+  it("recovers from comment-review failing on a permanent error, e.g. an invalid line number", async () => {
+    await withMockGitHub(
+      responses.GET_pull(5, "deadbeef"),
+      route(
+        "POST",
+        "/pulls/5/reviews$",
+        {
+          status: 422,
+          body: {
+            message: "Unprocessable Entity",
+            errors: ["line must be part of the diff"],
+          },
+        },
+        { body: { id: 121, html_url: "https://example/review/121" } },
+      ),
+
+      async ({ requests }) => {
+        // The failure message itself carries the exact recovery command --
+        // Claude shouldn't need to separately think to run `list-queue`.
+        const { claimedDir, failureMessage } =
+          await failCommentReviewAndGetClaimedDir();
+        expect(failureMessage).toMatch(/422/);
+        expect(failureMessage).toMatch(/line number doesn't exist/);
+        expect(failureMessage).toMatch(/retried automatically/);
+
+        // Claude fixes the line number and resubmits successfully.
+        await runQueueInlineComment(
+          "bad.js",
+          "10",
+          await bodyFile("correct line number"),
+        );
+        const { stdout } = await run(["comment-review"]);
+        expect(stdout).toMatch(/Submitted review with 1 inline comment/);
+
+        // Clean up the stuck batch so sweep doesn't retry (and fail) on it.
+        const discard = await run(["discard-queue", "--dir", claimedDir]);
+        expect(discard.stdout).toContain(`Discarded ${claimedDir}`);
+
+        const sweep = await run(["sweep"]);
+        expect(sweep.stdout).toMatch(/Nothing to sweep/);
+
+        expect(filterByUrlEnd(requests, "/reviews")).toHaveLength(2);
+      },
+    );
+  });
 });
