@@ -82,6 +82,7 @@ inputs:
       Bash(gh pr view:*)
       Bash(gh run list:*)
       Bash(gh run view:*)
+      Bash(pr-review --help:*)
       Bash(pr-review queue-inline-comment:*)
       Bash(pr-review reply-inline-comment:*)
       Bash(pr-review comment-review:*)

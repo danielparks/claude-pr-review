@@ -783,4 +783,46 @@ describe("pr-review CLI", () => {
       },
     );
   });
+
+  it("--help with no command lists every command and exits 0", async () => {
+    const { stdout } = await run(["--help"]);
+    expect(stdout).toMatch(/Usage: pr-review <command> \[options\]/);
+    expect(stdout).toMatch(/queue-inline-comment/);
+    expect(stdout).toMatch(/discard-queue/);
+  });
+
+  it("running with no command at all also shows top-level help", async () => {
+    const { stdout } = await run([]);
+    expect(stdout).toMatch(/Usage: pr-review <command> \[options\]/);
+  });
+
+  it("<command> --help shows that command's flags and exits 0, without calling the API", async () => {
+    await withMockGitHub(async ({ requests }) => {
+      const { stdout } = await run(["queue-inline-comment", "--help"]);
+      expect(stdout).toMatch(
+        /Usage: pr-review queue-inline-comment \[options\]/,
+      );
+      expect(stdout).toMatch(/--path PATH\s+\(required\)/);
+      expect(stdout).toMatch(/--body-file BODY_FILE\s+\(required\)/);
+      expect(requests).toHaveLength(0);
+    });
+  });
+
+  it("<command> -h short flag also shows help", async () => {
+    const { stdout } = await run(["discard-queue", "-h"]);
+    expect(stdout).toMatch(/Usage: pr-review discard-queue \[options\]/);
+  });
+
+  it("<command> --help doesn't require otherwise-required flags or touch the filesystem", async () => {
+    // No --body-file given, and none created -- --help must win before
+    // readBodyFile() would otherwise fail trying to read a missing file.
+    const { stdout } = await run(["request-changes-review", "--help"]);
+    expect(stdout).toMatch(/--body-file BODY_FILE\s+\(required\)/);
+  });
+
+  it("unknown command still fails and lists the available commands", async () => {
+    await expect(run(["not-a-real-command"])).rejects.toThrow(
+      /Unknown command: not-a-real-command.*discard-queue/s,
+    );
+  });
 });

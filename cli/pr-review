@@ -10,7 +10,13 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { getOptions, oneOf, positiveInt, required } from "./lib/args.js";
+import {
+  getOptions,
+  HelpRequested,
+  oneOf,
+  positiveInt,
+  required,
+} from "./lib/args.js";
 import { countLines, fail } from "./lib/util.js";
 import {
   claim,
@@ -81,7 +87,8 @@ async function readBodyFile(path, long, info) {
  *
  * See `initQueue`'s doc comment for more information.
  */
-async function cmdInit() {
+async function cmdInit(args) {
+  await getOptions(args, {}, "init");
   const root = queueRoot();
   try {
     await initQueue(root);
@@ -99,13 +106,17 @@ async function cmdInit() {
 }
 
 async function cmdQueueInlineComment(args) {
-  const [{ path, line, startLine, side, body }] = await getOptions(args, {
-    path: { map: required },
-    line: { map: positiveInt },
-    startLine: { long: "start-line" },
-    side: { map: oneOf("LEFT", "RIGHT"), default: "RIGHT" },
-    body: { long: "body-file", map: readBodyFile, required: true },
-  });
+  const [{ path, line, startLine, side, body }] = await getOptions(
+    args,
+    {
+      path: { map: required },
+      line: { map: positiveInt },
+      startLine: { long: "start-line" },
+      side: { map: oneOf("LEFT", "RIGHT"), default: "RIGHT" },
+      body: { long: "body-file", map: readBodyFile, required: true },
+    },
+    "queue-inline-comment",
+  );
 
   const comment = { path, body, side, line };
   if (startLine !== undefined) {
@@ -129,10 +140,14 @@ async function cmdQueueInlineComment(args) {
 }
 
 async function cmdReplyInlineComment(args) {
-  const [{ commentId, body }] = await getOptions(args, {
-    commentId: { long: "comment-id", map: positiveInt },
-    body: { long: "body-file", map: readBodyFile, required: true },
-  });
+  const [{ commentId, body }] = await getOptions(
+    args,
+    {
+      commentId: { long: "comment-id", map: positiveInt },
+      body: { long: "body-file", map: readBodyFile, required: true },
+    },
+    "reply-inline-comment",
+  );
 
   const token = requireToken();
   const { owner, repo } = repoFromEnv();
@@ -256,9 +271,11 @@ async function finalizeReview(event, body) {
 }
 
 async function cmdCommentReview(args) {
-  const [{ body }] = await getOptions(args, {
-    body: { long: "body-file", map: readBodyFile },
-  });
+  const [{ body }] = await getOptions(
+    args,
+    { body: { long: "body-file", map: readBodyFile } },
+    "comment-review",
+  );
   const { comments, result, skipped } = await finalizeReview("COMMENT", body);
   if (skipped) {
     fail(
@@ -272,9 +289,11 @@ async function cmdCommentReview(args) {
 }
 
 async function cmdApproveReview(args) {
-  const [{ body }] = await getOptions(args, {
-    body: { long: "body-file", map: readBodyFile },
-  });
+  const [{ body }] = await getOptions(
+    args,
+    { body: { long: "body-file", map: readBodyFile } },
+    "approve-review",
+  );
   const { comments, event, result } = await finalizeReview("APPROVE", body);
   if (event === "APPROVE") {
     console.log(
@@ -289,9 +308,11 @@ async function cmdApproveReview(args) {
 }
 
 async function cmdRequestChangesReview(args) {
-  const [{ body }] = await getOptions(args, {
-    body: { long: "body-file", map: readBodyFile, required: true },
-  });
+  const [{ body }] = await getOptions(
+    args,
+    { body: { long: "body-file", map: readBodyFile, required: true } },
+    "request-changes-review",
+  );
   const { comments, result } = await finalizeReview("REQUEST_CHANGES", body);
   console.log(
     `Submitted REQUEST_CHANGES review with ${comments.length} inline comment(s): ${result.html_url}`,
@@ -314,7 +335,8 @@ function formatQueuedComment(comment) {
  * for an invalid inline comment line number, after a corrected batch has
  * already been submitted successfully in its place.
  */
-async function cmdListQueue() {
+async function cmdListQueue(args) {
+  await getOptions(args, {}, "list-queue");
   const root = queueRoot();
   const batches = await listQueue(root);
   if (batches.length === 0) {
@@ -346,9 +368,11 @@ async function cmdListQueue() {
  * `list-queue`, so a crafted path can't be used to delete something else.
  */
 async function cmdDiscardQueue(args) {
-  const [{ dir }] = await getOptions(args, {
-    dir: { map: required },
-  });
+  const [{ dir }] = await getOptions(
+    args,
+    { dir: { map: required } },
+    "discard-queue",
+  );
 
   const root = queueRoot();
   const resolved = path.resolve(dir);
@@ -368,10 +392,12 @@ async function cmdDiscardQueue(args) {
  *
  * `checked` guards against Claude resolving a thread it didn't start.
  */
-async function doResolveThread(args, { checked }) {
-  const [{ threadId }] = await getOptions(args, {
-    threadId: { long: "thread-id", map: required },
-  });
+async function doResolveThread(args, { checked, command }) {
+  const [{ threadId }] = await getOptions(
+    args,
+    { threadId: { long: "thread-id", map: required } },
+    command,
+  );
 
   const token = requireToken();
 
@@ -397,11 +423,14 @@ async function doResolveThread(args, { checked }) {
 }
 
 function cmdResolveMyThread(args) {
-  return doResolveThread(args, { checked: true });
+  return doResolveThread(args, { checked: true, command: "resolve-my-thread" });
 }
 
 function cmdResolveAnyThread(args) {
-  return doResolveThread(args, { checked: false });
+  return doResolveThread(args, {
+    checked: false,
+    command: "resolve-any-thread",
+  });
 }
 
 /**
@@ -409,10 +438,12 @@ function cmdResolveAnyThread(args) {
  *
  * `checked` guards against Claude hiding someone else's review.
  */
-async function doHideReview(args, { checked }) {
-  const [{ reviewId }] = await getOptions(args, {
-    reviewId: { long: "review-id", map: positiveInt },
-  });
+async function doHideReview(args, { checked, command }) {
+  const [{ reviewId }] = await getOptions(
+    args,
+    { reviewId: { long: "review-id", map: positiveInt } },
+    command,
+  );
 
   const token = requireToken();
   const { owner, repo } = repoFromEnv();
@@ -439,11 +470,11 @@ async function doHideReview(args, { checked }) {
 }
 
 function cmdHideMyReview(args) {
-  return doHideReview(args, { checked: true });
+  return doHideReview(args, { checked: true, command: "hide-my-review" });
 }
 
 function cmdHideAnyReview(args) {
-  return doHideReview(args, { checked: false });
+  return doHideReview(args, { checked: false, command: "hide-any-review" });
 }
 
 /**
@@ -460,9 +491,11 @@ function cmdHideAnyReview(args) {
  * approval sweep never actually watched happen live.
  */
 async function cmdSweep(args) {
-  const [{ forceDowngradeApproval }] = await getOptions(args, {
-    forceDowngradeApproval: { type: "boolean", long: "downgrade-approval" },
-  });
+  const [{ forceDowngradeApproval }] = await getOptions(
+    args,
+    { forceDowngradeApproval: { type: "boolean", long: "downgrade-approval" } },
+    "sweep",
+  );
 
   const root = queueRoot();
   let handled = 0;
@@ -539,12 +572,28 @@ const COMMANDS = {
   sweep: cmdSweep,
 };
 
+function formatTopLevelHelp() {
+  return [
+    "Usage: pr-review <command> [options]",
+    "",
+    "Commands:",
+    ...Object.keys(COMMANDS).map((name) => `  ${name}`),
+    "",
+    "Run 'pr-review <command> --help' for details on a specific command.",
+  ].join("\n");
+}
+
 async function main() {
   const [, , command, ...rest] = process.argv;
+  if (command === undefined || command === "--help" || command === "-h") {
+    console.log(formatTopLevelHelp());
+    return;
+  }
+
   const handler = COMMANDS[command];
   if (!handler) {
     fail(
-      `Unknown command: ${command ?? "(none)"}. Expected one of: ` +
+      `Unknown command: ${command}. Expected one of: ` +
         Object.keys(COMMANDS).join(", "),
     );
   }
@@ -552,6 +601,10 @@ async function main() {
 }
 
 main().catch((error) => {
+  if (error instanceof HelpRequested) {
+    console.log(error.message);
+    return;
+  }
   const message = error instanceof Error ? error.message : String(error);
   console.error(`Error: ${message}`);
   process.exit(1);

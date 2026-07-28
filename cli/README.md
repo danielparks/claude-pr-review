@@ -12,6 +12,12 @@ This isn’t reaching around anything Anthropic didn’t already intend: it’s 
 
 This has zero runtime dependencies — it’s plain JavaScript using the built-in `fetch`, so `action.yaml` runs `cli/pr-review` directly with no bundling and no install step at consumption time. `npm ci`/`eslint`/`vitest` are dev-only, for local development and `scripts/cli-check` (wired into pre-commit).
 
+## `--help`
+
+`pr-review --help` (or `-h`, or running with no command at all) lists every command. `pr-review <command> --help` shows that command's flags. Both exit `0`, and `--help` always wins over parsing the rest of the command line — it's checked before any flag's value is read or validated, so it works even if other required flags are missing.
+
+Command usage is generated from the same `definitions` object each command already passes to `getOptions()` (see `lib/args.js`'s `formatCommandHelp()`), so it can't drift out of sync with what a command actually accepts. It currently shows each flag's name and whether it's required, not what the flag _means_ — that's the next thing to add here.
+
 ## Why a queue directory instead of an in-memory batch
 
 Comments are queued as one file per comment (`$RUNNER_TEMP/pr-review-queue/comments/<timestamp>-<uuid>.json`) rather than held in memory, because `pr-review` is a fresh process on every invocation — there’s no long-lived server to hold state. Each `queue-inline-comment` call only ever creates a new, uniquely-named file, so concurrent invocations can never collide; there’s nothing to lock.

@@ -19,7 +19,7 @@ export function positiveInt(value, label) {
 }
 
 export function oneOf(...values) {
-  return (value, long) => {
+  const validate = (value, long) => {
     if (!values.includes(value ?? "")) {
       // If value was undefined or "", then values must not have included "".
       required(value, long);
@@ -27,9 +27,60 @@ export function oneOf(...values) {
     }
     return value;
   };
+  // Lets formatCommandHelp() show the allowed values instead of a generic
+  // placeholder, without having to duplicate them.
+  validate.choices = values;
+  return validate;
 }
 
-export async function getOptions(args, definitions) {
+/**
+ * Thrown by getOptions() when `--help`/`-h` is present, instead of parsing.
+ * `message` is the full, ready-to-print usage text -- `pr-review`'s top-level
+ * catch prints it and exits 0, since asking for help isn't a failure.
+ */
+export class HelpRequested extends Error {}
+
+function isRequired(info) {
+  return (
+    info.required === true || info.map === required || info.map === positiveInt
+  );
+}
+
+function placeholder(long, info) {
+  if (info.type === "boolean") return "";
+  if (info.map?.choices) return ` ${info.map.choices.join("|")}`;
+  return ` ${long.toUpperCase().replace(/-/g, "_")}`;
+}
+
+/**
+ * Render usage text for one command from the same `definitions` object
+ * getOptions() itself uses to parse -- so it can never describe a flag that
+ * doesn't exist, or omit one that does.
+ */
+export function formatCommandHelp(command, definitions) {
+  const lines = [`Usage: pr-review ${command ?? "<command>"} [options]`, ""];
+  for (const [key, { long, ...info }] of Object.entries(definitions)) {
+    const name = long ?? key;
+    const notes = [];
+    if (isRequired(info)) notes.push("required");
+    if (info.default !== undefined) notes.push(`default: ${info.default}`);
+    lines.push(
+      `  --${name}${placeholder(name, info)}` +
+        (notes.length ? `  (${notes.join(", ")})` : ""),
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
+ * `command` is only used to label `--help` output -- pass the same name
+ * `pr-review`'s COMMANDS map uses for this command, e.g. "queue-inline-comment".
+ */
+export async function getOptions(args, definitions, command) {
+  if (args.includes("--help") || args.includes("-h")) {
+    throw new HelpRequested(formatCommandHelp(command, definitions));
+  }
+
   const byLong = new Map();
   const { values, ...result } = parseArgs({
     args,

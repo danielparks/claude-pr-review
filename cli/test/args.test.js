@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { getOptions, oneOf, positiveInt, required } from "../lib/args.js";
+import {
+  formatCommandHelp,
+  getOptions,
+  HelpRequested,
+  oneOf,
+  positiveInt,
+  required,
+} from "../lib/args.js";
 import { CliError } from "../lib/util.js";
 
 describe("required()", () => {
@@ -78,6 +85,10 @@ describe("oneOf()", () => {
 
   it("returns undefined as-is, not coerced to '', when '' is allowed", () => {
     expect(oneOf("a", "")(undefined, "--side")).toBeUndefined();
+  });
+
+  it("exposes the allowed values as .choices, for formatCommandHelp()", () => {
+    expect(oneOf("LEFT", "RIGHT").choices).toEqual(["LEFT", "RIGHT"]);
   });
 });
 
@@ -189,5 +200,70 @@ describe("getOptions()", () => {
         path: { map: required },
       }),
     ).rejects.toThrow("--path is required");
+  });
+
+  it("rejects with HelpRequested when --help is present, without invoking any map", async () => {
+    let called = false;
+    await expect(
+      getOptions(
+        ["--help"],
+        { path: { map: () => (called = true) } },
+        "some-command",
+      ),
+    ).rejects.toThrow(HelpRequested);
+    expect(called).toBe(false);
+  });
+
+  it("rejects with HelpRequested when -h is present", async () => {
+    await expect(
+      getOptions(["-h"], { path: {} }, "some-command"),
+    ).rejects.toThrow(HelpRequested);
+  });
+
+  it("HelpRequested's message is the formatted command help", async () => {
+    const definitions = { path: { map: required } };
+    await expect(
+      getOptions(["--help"], definitions, "some-command"),
+    ).rejects.toThrow(formatCommandHelp("some-command", definitions));
+  });
+});
+
+describe("formatCommandHelp()", () => {
+  it("labels the command and lists each flag", () => {
+    const help = formatCommandHelp("queue-inline-comment", {
+      path: { map: required },
+      line: { map: positiveInt },
+      startLine: { long: "start-line" },
+      side: { map: oneOf("LEFT", "RIGHT"), default: "RIGHT" },
+      body: { long: "body-file", map: required, required: true },
+    });
+    expect(help).toBe(
+      [
+        "Usage: pr-review queue-inline-comment [options]",
+        "",
+        "  --path PATH  (required)",
+        "  --line LINE  (required)",
+        "  --start-line START_LINE",
+        "  --side LEFT|RIGHT  (default: RIGHT)",
+        "  --body-file BODY_FILE  (required)",
+      ].join("\n"),
+    );
+  });
+
+  it("marks a boolean flag with no value placeholder", () => {
+    const help = formatCommandHelp("sweep", {
+      forceDowngradeApproval: { type: "boolean", long: "downgrade-approval" },
+    });
+    expect(help).toBe(
+      ["Usage: pr-review sweep [options]", "", "  --downgrade-approval"].join(
+        "\n",
+      ),
+    );
+  });
+
+  it("falls back to a generic label when command is omitted", () => {
+    expect(formatCommandHelp(undefined, {})).toBe(
+      "Usage: pr-review <command> [options]\n",
+    );
   });
 });
