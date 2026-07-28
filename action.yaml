@@ -4,7 +4,9 @@ description: >
   comments in the pull request, including inline comments along with the nearest
   diff fragment.
 
-  (The full diff is not included; Claude already has access to that.)
+  The full diff is saved to a file to allow Claude to read it however it likes.
+  Claude’s first step in a review is almost always to get the diff, so this
+  skips at least one tool use.
 
   This detects whether a re-review is needed on `synchronize` (push) by
   comparing the PR diff against a cached baseline. If the PR is the same, i.e.
@@ -25,8 +27,9 @@ inputs:
       Prompt sent to Claude for both initial reviews and re-reviews. Claude
       determines the current state of the PR from context.
     default: |
-      Please review this pull request. The PR branch is already checked out in
-      the current working directory, and the PR discussion is included below.
+      Please review this pull request. /tmp/pr.patch contains the overall diff
+      for the PR, the PR branch is checked out in the current working directory,
+      and the PR discussion is included below.
 
       If there are prior review comments from you in the PR discussion, treat
       this as a re-review. Respond to discussion as appropriate, and review new
@@ -198,12 +201,15 @@ runs:
           git fetch --depth=1 "$REPO_URL" "$HEAD_SHA"
         fi
 
+        # Produce overall diff for PR for Claude.
+        git diff "${MERGE_BASE}..${HEAD_SHA}" >/tmp/pr.patch
+
         mkdir -p .pr-cache
+
         # Remove line numbers from @@ hunk headers and delete index lines (base
         # blob SHAs) so that a clean rebase produces an identical diff.
         # Note: binary files are excluded from the diff and won't be reviewed.
-        git diff "${MERGE_BASE}..${HEAD_SHA}" \
-          | grep -v '^index ' \
+        grep -v '^index ' /tmp/pr.patch \
           | sed -e 's/^@@.*@@/@@ - - @@/' \
           > .pr-cache/new.patch
 

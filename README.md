@@ -2,7 +2,7 @@
 
 Have Claude review and re-review pull requests with the context of all the comments in the pull request, including inline comments along with the nearest diff fragment.
 
-(The full diff is not included; Claude already has access to that.)
+The full diff is saved to a file to allow Claude to read it however it likes. Claude’s first step in a review is almost always to get the diff, so this skips at least one tool use.
 
 This detects whether a re-review is needed on `synchronize` (push) by comparing the PR diff against a cached baseline. If the PR is the same, i.e. it was rebased after changes were made elsewhere in the codebase, this skips the Claude review.
 
@@ -38,8 +38,9 @@ the current state of the PR from context. Defaults to:
 
 <!-- default:prompt -->
 
-    Please review this pull request. The PR branch is already checked out in
-    the current working directory, and the PR discussion is included below.
+    Please review this pull request. /tmp/pr.patch contains the overall diff
+    for the PR, the PR branch is checked out in the current working directory,
+    and the PR discussion is included below.
 
     If there are prior review comments from you in the PR discussion, treat
     this as a re-review. Respond to discussion as appropriate, and review new
