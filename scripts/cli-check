@@ -3,8 +3,6 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../cli"
 
-if [[ ! -d node_modules ]] || ! npm ls --depth=0 &>/dev/null; then
-  npm ci
-fi
+npm clean-install
 npm run lint
 npm test
