@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - Added a bundled `pr-review` CLI tool so Claude can post inline comments as a single grouped GitHub review instead of one review per comment.
 - Updated [gh-pr-render] to version 0.5.0 to render labels, reactions, milestones, etc. and to use blockquotes to ensure that content is distinct from structure. This version also limits the number of comments it renders, and can be used to view an inline thread on its own.
 - Clarified prompt (previously example prompts) by combining instructions on how to submit comments with instructions on when to submit comments.
+- Updated `allowed-tools` processing to strip `#` comment lines.
 - Added `additional-allowed-tools` input that appends to default allowed tools list.
 - Added `additional-prompt` input that appends to the default prompt.
 - Added `thinking-log-artifact-retention` input to trigger saving Claude’s thinking as a CI artifact. See the warning in README.md.

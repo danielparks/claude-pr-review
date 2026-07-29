@@ -88,7 +88,6 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
 <!-- default:allowed-tools -->
 
     Read
-    Edit(//tmp/pr-review-scratch/**)
     Bash(find:*)
     Bash(grep:*)
     Bash(git log:*)
@@ -98,12 +97,22 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(gh pr view:*)
     Bash(gh run list:*)
     Bash(gh run view:*)
-    Bash(gh-pr-render:*)
     Bash(pr-review queue-inline-comment:*)
     Bash(pr-review reply-inline-comment:*)
     Bash(pr-review comment-review:*)
     Bash(pr-review list-queue:*)
     Bash(pr-review discard-queue:*)
+
+    # From https://code.claude.com/docs/en/agent-sdk/permissions.md:
+    #
+    # > Use `//path` for an absolute filesystem path: a deny rule of
+    # > `Edit(//secrets/**)` blocks writes anywhere under `/secrets` on disk.
+    # > With a single leading slash, `Edit(/secrets/**)` anchors at the rule's
+    # > source instead.
+    Edit(//tmp/pr-review-scratch/**)
+
+    # Needed to view long inline comment threads:
+    Bash(gh-pr-render:*)
 
 <!-- /default:allowed-tools -->
 
