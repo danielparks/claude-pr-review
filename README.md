@@ -146,13 +146,13 @@ Defaults to: `disabled`
 This action bundles its own CLI tool, [`cli/pr-review`], that `action.yaml` puts on `PATH` for Claude to run via its Bash tool:
 
 - `pr-review queue-inline-comment` queues an inline comment on disk. Nothing is posted to GitHub until `comment-review` is called.
-- `pr-review comment-review` posts everything queued by `queue-inline-comment`, plus an optional top-level body, as a single grouped comment review. Claude doesn't have to call this itself — `action.yaml` runs it automatically after Claude's turn ends if anything is still queued.
+- `pr-review comment-review` posts everything queued by `queue-inline-comment`, plus an optional top-level body, as a single grouped comment review. Claude doesn’t have to call this itself — `action.yaml` runs it automatically after Claude’s turn ends if anything is still queued.
 - `pr-review reply-inline-comment` replies to an existing inline comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
-- `pr-review list-queue` and `pr-review discard-queue --dir PATH` let Claude recover if a submission fails for a reason that won't change on retry (e.g. GitHub rejecting an inline comment's line number): after fixing the problem and resubmitting successfully, Claude can discard the original failed batch so the automatic post-turn sweep doesn't keep retrying — and failing on — it.
+- `pr-review list-queue` and `pr-review discard-queue --dir PATH` let Claude recover if a submission fails for a reason that won’t change on retry (e.g. GitHub rejecting an inline comment’s line number): after fixing the problem and resubmitting successfully, Claude can discard the original failed batch so the automatic post-turn sweep doesn’t keep retrying — and failing on — it.
 
-[anthropics/claude-code-action]'s built-in inline-comment tool posts each inline comment through GitHub's single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.
+[anthropics/claude-code-action]’s built-in inline-comment tool posts each inline comment through GitHub’s single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.
 
-This is a Bash-invoked CLI tool rather than an MCP server so that it can post as `claude[bot]` instead of `github-actions[bot]`: the Claude App token only reaches subprocesses that inherit [anthropics/claude-code-action]'s real environment, which a Bash-tool call does and an MCP server does not. It's plain, dependency-free JavaScript that `action.yaml` runs directly with no build step — see [`cli/README.md`] for more information, including the [opt-in `pr-review` subcommands][opt-in-tools] that are left out of the default `allowed-tools` list.
+This is a Bash-invoked CLI tool rather than an MCP server so that it can post as `claude[bot]` instead of `github-actions[bot]`: the Claude App token only reaches subprocesses that inherit [anthropics/claude-code-action]’s real environment, which a Bash-tool call does and an MCP server does not. It’s plain, dependency-free JavaScript that `action.yaml` runs directly with no build step — see [`cli/README.md`] for more information, including the [opt-in `pr-review` subcommands][opt-in-tools] that are left out of the default `allowed-tools` list.
 
 ### PR updates
 
