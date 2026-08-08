@@ -60,9 +60,9 @@ async function graphqlRequest(token, query, variables) {
 
   const data = await res.json();
   if (!res.ok || data.errors) {
-    const message = data.errors
+    const message = data.errors && data.errors.length
       ? data.errors.map((e) => e.message).join("; ")
-      : res.statusText;
+      : res.statusText || res.status;
     throw new GitHubApiError(
       `GitHub GraphQL request failed: ${message}`,
       res.status,
