@@ -223,14 +223,16 @@ describe("getOptions()", () => {
   it("HelpRequested's message is the formatted command help", async () => {
     const definitions = { path: { map: required } };
     await expect(
-      getOptions(["--help"], definitions, "some-command"),
-    ).rejects.toThrow(formatCommandHelp("some-command", definitions));
+      getOptions(["--help"], definitions, "some-command", undefined),
+    ).rejects.toThrow(
+      formatCommandHelp("some-command", undefined, definitions),
+    );
   });
 });
 
 describe("formatCommandHelp()", () => {
   it("labels the command and lists each flag", () => {
-    const help = formatCommandHelp("queue-inline-comment", {
+    const help = formatCommandHelp("queue-inline-comment", undefined, {
       path: { map: required },
       line: { map: positiveInt },
       startLine: { long: "start-line" },
@@ -251,29 +253,35 @@ describe("formatCommandHelp()", () => {
   });
 
   it("marks a boolean flag with no value placeholder", () => {
-    const help = formatCommandHelp("sweep", {
+    const help = formatCommandHelp("sweep", "description", {
       forceDowngradeApproval: { type: "boolean", long: "downgrade-approval" },
     });
     expect(help).toBe(
-      ["Usage: pr-review sweep [options]", "", "  --downgrade-approval"].join(
-        "\n",
-      ),
+      [
+        "Usage: pr-review sweep [options]",
+        "",
+        "description",
+        "",
+        "  --downgrade-approval",
+      ].join("\n"),
     );
   });
 
   it("falls back to a generic label when command is omitted", () => {
-    expect(formatCommandHelp(undefined, {})).toBe(
-      "Usage: pr-review <command> [options]\n",
+    expect(formatCommandHelp(undefined, undefined, {})).toBe(
+      "Usage: pr-review <command> [options]",
     );
   });
 
   it("adds an indented description line under a flag that has one", () => {
-    const help = formatCommandHelp("discard-queue", {
+    const help = formatCommandHelp("discard-queue", "description", {
       dir: { map: required, description: "Which batch to discard." },
     });
     expect(help).toBe(
       [
         "Usage: pr-review discard-queue [options]",
+        "",
+        "description",
         "",
         "  --dir DIR  (required)",
         "      Which batch to discard.",
@@ -282,9 +290,9 @@ describe("formatCommandHelp()", () => {
   });
 
   it("omits the description line entirely when a flag has none", () => {
-    const help = formatCommandHelp("sweep", {
+    const help = formatCommandHelp("sweep", "description", {
       forceDowngradeApproval: { type: "boolean", long: "downgrade-approval" },
     });
-    expect(help.split("\n")).toHaveLength(3);
+    expect(help.split("\n")).toHaveLength(5);
   });
 });

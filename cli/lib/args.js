@@ -57,11 +57,17 @@ function placeholder(long, info) {
  * getOptions() itself uses to parse -- so it can never describe a flag that
  * doesn't exist, or omit one that does.
  */
-export function formatCommandHelp(command, definitions) {
-  const lines = [`Usage: pr-review ${command ?? "<command>"} [options]`, ""];
-  for (const [key, { long, description, ...info }] of Object.entries(
-    definitions,
-  )) {
+export function formatCommandHelp(command, description, definitions) {
+  const options = Array.from(Object.entries(definitions));
+  const lines = [`Usage: pr-review ${command ?? "<command>"} [options]`];
+  if (description) {
+    lines.push("");
+    lines.push(description);
+  }
+  if (options.length) {
+    lines.push("");
+  }
+  for (const [key, { long, description, ...info }] of options) {
     const name = long ?? key;
     const notes = [];
     if (isRequired(info)) notes.push("required");
@@ -79,9 +85,11 @@ export function formatCommandHelp(command, definitions) {
  * `command` is only used to label `--help` output -- pass the same name
  * `pr-review`'s COMMANDS map uses for this command, e.g. "queue-inline-comment".
  */
-export async function getOptions(args, definitions, command) {
+export async function getOptions(args, definitions, command, description) {
   if (args.includes("--help") || args.includes("-h")) {
-    throw new HelpRequested(formatCommandHelp(command, definitions));
+    throw new HelpRequested(
+      formatCommandHelp(command, description, definitions),
+    );
   }
 
   const byLong = new Map();
@@ -109,7 +117,7 @@ export class Commands {
 
   add(name, description, definitions, func) {
     const wrapper = async (args) =>
-      await func(...(await getOptions(args, definitions, name)));
+      await func(...(await getOptions(args, definitions, name, description)));
     wrapper.description = description;
     this.commands.set(name, wrapper);
     return this;
