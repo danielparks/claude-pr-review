@@ -103,3 +103,23 @@ export async function getOptions(args, definitions, command) {
   }
   return [newValues, result];
 }
+
+export class Commands {
+  commands = new Map();
+
+  add(name, description, definitions, func) {
+    const wrapper = async (args) =>
+      await func(...(await getOptions(args, definitions, name)));
+    wrapper.description = description;
+    this.commands.set(name, wrapper);
+    return this;
+  }
+
+  names() {
+    return Array.from(this.commands.keys());
+  }
+
+  get(name) {
+    return this.commands.get(name);
+  }
+}

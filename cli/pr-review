@@ -11,13 +11,13 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  getOptions,
+  Commands,
   HelpRequested,
   oneOf,
   positiveInt,
   required,
 } from "./lib/args.js";
-import { countLines, fail } from "./lib/util.js";
+import { CliError, countLines, fail } from "./lib/util.js";
 import {
   claim,
   cleanup,
@@ -44,6 +44,8 @@ import {
   withApiError,
 } from "./lib/github.js";
 import redact from "./lib/redact.js";
+
+const COMMANDS = new Commands();
 
 function requireToken() {
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
@@ -87,107 +89,109 @@ async function readBodyFile(path, long, info) {
  *
  * See `initQueue`'s doc comment for more information.
  */
-async function cmdInit(args) {
-  await getOptions(args, {}, "init");
-  const root = queueRoot();
-  try {
-    await initQueue(root);
-  } catch (error) {
-    if (error.code === "EEXIST") {
-      fail(
-        `${root} already exists -- refusing to reuse a queue directory ` +
-          "this job didn't create fresh. On a self-hosted runner, make " +
-          "sure RUNNER_TEMP is cleared between jobs.",
-      );
+COMMANDS.add(
+  "init",
+  "Create the queue directory. Run once by action.yaml before Claude's turn starts -- Claude shouldn't call this.",
+  {},
+  async () => {
+    const root = queueRoot();
+    try {
+      await initQueue(root);
+    } catch (error) {
+      if (error.code === "EEXIST") {
+        fail(
+          `${root} already exists -- refusing to reuse a queue directory ` +
+            "this job didn't create fresh. On a self-hosted runner, make " +
+            "sure RUNNER_TEMP is cleared between jobs.",
+        );
+      }
+      throw error;
     }
-    throw error;
-  }
-  console.log(`Created queue directory: ${root}`);
-}
+    console.log(`Created queue directory: ${root}`);
+  },
+);
 
-async function cmdQueueInlineComment(args) {
-  const [{ path, line, startLine, side, body }] = await getOptions(
-    args,
-    {
-      path: {
-        map: required,
-        description:
-          "File path, relative to the repo root, as it appears in the diff.",
-      },
-      line: {
-        map: positiveInt,
-        description:
-          "Line number in the file's new version (or old version, if --side LEFT) to attach the comment to. Must be part of the diff.",
-      },
-      startLine: {
-        long: "start-line",
-        description:
-          "Start of a multi-line comment range; the comment covers --start-line through --line. Omit for a single-line comment.",
-      },
-      side: {
-        map: oneOf("LEFT", "RIGHT"),
-        default: "RIGHT",
-        description:
-          "Which version of the diff --line/--start-line refer to: RIGHT is the new version, LEFT is the old.",
-      },
-      body: {
-        long: "body-file",
-        map: readBodyFile,
-        required: true,
-        description: "Path to a file containing the comment body.",
-      },
+COMMANDS.add(
+  "queue-inline-comment",
+  "Queue an inline comment on disk. Nothing is posted until a review is finalized.",
+  {
+    path: {
+      map: required,
+      description:
+        "File path, relative to the repo root, as it appears in the diff.",
     },
-    "queue-inline-comment",
-  );
-
-  const comment = { path, body, side, line };
-  if (startLine !== undefined) {
-    comment.start_line = positiveInt(startLine, "--start-line");
-    if (comment.start_line >= line) {
-      fail(`--start-line (${startLine}) must be less than --line (${line})`);
+    line: {
+      map: positiveInt,
+      description:
+        "Line number in the file's new version (or old version, if --side LEFT) to attach the comment to. Must be part of the diff.",
+    },
+    startLine: {
+      long: "start-line",
+      description:
+        "Start of a multi-line comment range; the comment covers --start-line through --line. Omit for a single-line comment.",
+    },
+    side: {
+      map: oneOf("LEFT", "RIGHT"),
+      default: "RIGHT",
+      description:
+        "Which version of the diff --line/--start-line refer to: RIGHT is the new version, LEFT is the old.",
+    },
+    body: {
+      long: "body-file",
+      map: readBodyFile,
+      required: true,
+      description: "Path to a file containing the comment body.",
+    },
+  },
+  async ({ path, line, startLine, side, body }) => {
+    const comment = { path, body, side, line };
+    if (startLine !== undefined) {
+      comment.start_line = positiveInt(startLine, "--start-line");
+      if (comment.start_line >= line) {
+        fail(`--start-line (${startLine}) must be less than --line (${line})`);
+      }
+      comment.start_side = side;
     }
-    comment.start_side = side;
-  }
 
-  const root = queueRoot();
-  const file = await queueComment(root, comment);
-  const range =
-    comment.start_line !== undefined
-      ? `lines ${comment.start_line}-${line}`
-      : `line ${line}`;
-  console.log(
-    `Queued comment for ${path} ${range} (${file}). ` +
-      "Call 'comment-review' when you're done adding comments.",
-  );
-}
+    const root = queueRoot();
+    const file = await queueComment(root, comment);
+    const range =
+      comment.start_line !== undefined
+        ? `lines ${comment.start_line}-${line}`
+        : `line ${line}`;
+    console.log(
+      `Queued comment for ${path} ${range} (${file}). ` +
+        "Call 'comment-review' when you're done adding comments.",
+    );
+  },
+);
 
-async function cmdReplyInlineComment(args) {
-  const [{ commentId, body }] = await getOptions(
-    args,
-    {
-      commentId: {
-        long: "comment-id",
-        map: positiveInt,
-        description: "ID of the existing inline review comment to reply to.",
-      },
-      body: {
-        long: "body-file",
-        map: readBodyFile,
-        required: true,
-        description: "Path to a file containing the reply body.",
-      },
+COMMANDS.add(
+  "reply-inline-comment",
+  "Reply to an existing inline comment thread. Posts immediately.",
+  {
+    commentId: {
+      long: "comment-id",
+      map: positiveInt,
+      description: "ID of the existing inline review comment to reply to.",
     },
-    "reply-inline-comment",
-  );
-
-  const token = requireToken();
-  const { owner, repo } = repoFromEnv();
-  const pr = prNumberFromEnv();
-  const result = await withApiError(() =>
-    createReply(token, owner, repo, pr, commentId, body),
-  );
-  console.log(`Posted reply: ${result.html_url}`);
-}
+    body: {
+      long: "body-file",
+      map: readBodyFile,
+      required: true,
+      description: "Path to a file containing the reply body.",
+    },
+  },
+  async ({ commentId, body }) => {
+    const token = requireToken();
+    const { owner, repo } = repoFromEnv();
+    const pr = prNumberFromEnv();
+    const result = await withApiError(() =>
+      createReply(token, owner, repo, pr, commentId, body),
+    );
+    console.log(`Posted reply: ${result.html_url}`);
+  },
+);
 
 const DOWNGRADE_REJECTED_NOTE =
   "\n\n---\n_This review was submitted as a comment instead of an approval " +
@@ -301,76 +305,76 @@ async function finalizeReview(event, body) {
   return result;
 }
 
-async function cmdCommentReview(args) {
-  const [{ body }] = await getOptions(
-    args,
-    {
-      body: {
-        long: "body-file",
-        map: readBodyFile,
-        description:
-          "Path to a file containing the top-level review body. Optional -- omit for an inline-comments-only review.",
-      },
+COMMANDS.add(
+  "comment-review",
+  "Submit everything queued as one grouped COMMENT review.",
+  {
+    body: {
+      long: "body-file",
+      map: readBodyFile,
+      description:
+        "Path to a file containing the top-level review body. Optional -- omit for an inline-comments-only review.",
     },
-    "comment-review",
-  );
-  const { comments, result, skipped } = await finalizeReview("COMMENT", body);
-  if (skipped) {
-    fail(
-      "Nothing to submit: call queue-inline-comment first, or pass " +
-        "--body-file for top-level-only feedback.",
-    );
-  }
-  console.log(
-    `Submitted review with ${comments.length} inline comment(s): ${result.html_url}`,
-  );
-}
-
-async function cmdApproveReview(args) {
-  const [{ body }] = await getOptions(
-    args,
-    {
-      body: {
-        long: "body-file",
-        map: readBodyFile,
-        description:
-          "Path to a file containing the top-level review body. Optional -- omit for an inline-comments-only approval.",
-      },
-    },
-    "approve-review",
-  );
-  const { comments, event, result } = await finalizeReview("APPROVE", body);
-  if (event === "APPROVE") {
+  },
+  async ({ body }) => {
+    const { comments, result, skipped } = await finalizeReview("COMMENT", body);
+    if (skipped) {
+      fail(
+        "Nothing to submit: call queue-inline-comment first, or pass " +
+          "--body-file for top-level-only feedback.",
+      );
+    }
     console.log(
-      `Submitted APPROVE review with ${comments.length} inline comment(s): ${result.html_url}`,
+      `Submitted review with ${comments.length} inline comment(s): ${result.html_url}`,
     );
-  } else {
-    console.log(
-      "GitHub didn't allow approving; submitted as a comment with " +
-        `${comments.length} inline comment(s) instead: ${result.html_url}`,
-    );
-  }
-}
+  },
+);
 
-async function cmdRequestChangesReview(args) {
-  const [{ body }] = await getOptions(
-    args,
-    {
-      body: {
-        long: "body-file",
-        map: readBodyFile,
-        required: true,
-        description:
-          "Path to a file containing the top-level review body, explaining what must change.",
-      },
+COMMANDS.add(
+  "approve-review",
+  "Submit everything queued as one grouped APPROVE review.",
+  {
+    body: {
+      long: "body-file",
+      map: readBodyFile,
+      description:
+        "Path to a file containing the top-level review body. Optional -- omit for an inline-comments-only approval.",
     },
-    "request-changes-review",
-  );
-  const { comments, result } = await finalizeReview("REQUEST_CHANGES", body);
-  console.log(
-    `Submitted REQUEST_CHANGES review with ${comments.length} inline comment(s): ${result.html_url}`,
-  );
-}
+  },
+  async ({ body }) => {
+    const { comments, event, result } = await finalizeReview("APPROVE", body);
+    if (event === "APPROVE") {
+      console.log(
+        `Submitted APPROVE review with ${comments.length} inline comment(s): ${result.html_url}`,
+      );
+    } else {
+      console.log(
+        "GitHub didn't allow approving; submitted as a comment with " +
+          `${comments.length} inline comment(s) instead: ${result.html_url}`,
+      );
+    }
+  },
+);
+
+COMMANDS.add(
+  "request-changes-review",
+  "Submit everything queued as one grouped REQUEST_CHANGES review.",
+  {
+    body: {
+      long: "body-file",
+      map: readBodyFile,
+      required: true,
+      description:
+        "Path to a file containing the top-level review body, explaining what must change.",
+    },
+  },
+  async ({ body }) => {
+    const { comments, result } = await finalizeReview("REQUEST_CHANGES", body);
+    console.log(
+      `Submitted REQUEST_CHANGES review with ${comments.length} inline comment(s): ${result.html_url}`,
+    );
+  },
+);
 
 function formatQueuedComment(comment) {
   const range =
@@ -388,27 +392,31 @@ function formatQueuedComment(comment) {
  * for an invalid inline comment line number, after a corrected batch has
  * already been submitted successfully in its place.
  */
-async function cmdListQueue(args) {
-  await getOptions(args, {}, "list-queue");
-  const root = queueRoot();
-  const batches = await listQueue(root);
-  if (batches.length === 0) {
-    console.log(`Nothing queued (${root}).`);
-    return;
-  }
-
-  for (const { dir, state, comments, body, event } of batches) {
-    console.log(
-      `${dir} [${state}] ${event}: ${comments.length} inline comment(s)` +
-        (body
-          ? `, ${countLines(body)} line top-level body`
-          : ", no top-level body"),
-    );
-    for (const comment of comments) {
-      console.log(formatQueuedComment(comment));
+COMMANDS.add(
+  "list-queue",
+  "Show every batch currently in the queue, in any state.",
+  {},
+  async () => {
+    const root = queueRoot();
+    const batches = await listQueue(root);
+    if (batches.length === 0) {
+      console.log(`Nothing queued (${root}).`);
+      return;
     }
-  }
-}
+
+    for (const { dir, state, comments, body, event } of batches) {
+      console.log(
+        `${dir} [${state}] ${event}: ${comments.length} inline comment(s)` +
+          (body
+            ? `, ${countLines(body)} line top-level body`
+            : ", no top-level body"),
+      );
+      for (const comment of comments) {
+        console.log(formatQueuedComment(comment));
+      }
+    }
+  },
+);
 
 /**
  * Permanently remove a claimed batch without submitting it. Meant for a
@@ -420,51 +428,37 @@ async function cmdListQueue(args) {
  * Only accepts a directory directly inside the queue root, as printed by
  * `list-queue`, so a crafted path can't be used to delete something else.
  */
-async function cmdDiscardQueue(args) {
-  const [{ dir }] = await getOptions(
-    args,
-    {
-      dir: {
-        map: required,
-        description:
-          "Path to the claimed batch directory to discard, exactly as printed by list-queue.",
-      },
+COMMANDS.add(
+  "discard-queue",
+  "Permanently remove a stuck claimed batch without submitting it.",
+  {
+    dir: {
+      map: required,
+      description:
+        "Path to the claimed batch directory to discard, exactly as printed by list-queue.",
     },
-    "discard-queue",
-  );
+  },
+  async ({ dir }) => {
+    const root = queueRoot();
+    const resolved = path.resolve(dir);
+    if (path.dirname(resolved) !== path.resolve(root)) {
+      fail(
+        `--dir must be a batch directory directly inside the queue root ` +
+          `(${root}), as printed by 'list-queue'. Got: ${dir}`,
+      );
+    }
 
-  const root = queueRoot();
-  const resolved = path.resolve(dir);
-  if (path.dirname(resolved) !== path.resolve(root)) {
-    fail(
-      `--dir must be a batch directory directly inside the queue root ` +
-        `(${root}), as printed by 'list-queue'. Got: ${dir}`,
-    );
-  }
-
-  await discardClaimed(resolved);
-  console.log(`Discarded ${resolved}.`);
-}
+    await discardClaimed(resolved);
+    console.log(`Discarded ${resolved}.`);
+  },
+);
 
 /**
  * Resolve a thread.
  *
  * `checked` guards against Claude resolving a thread it didn't start.
  */
-async function doResolveThread(args, { checked, command }) {
-  const [{ threadId }] = await getOptions(
-    args,
-    {
-      threadId: {
-        long: "thread-id",
-        map: required,
-        description:
-          "GraphQL node ID of the review thread to resolve (shown by gh-pr-render above each thread).",
-      },
-    },
-    command,
-  );
-
+async function doResolveThread({ checked, threadId }) {
   const token = requireToken();
 
   if (checked) {
@@ -488,35 +482,35 @@ async function doResolveThread(args, { checked, command }) {
   console.log(`Resolved thread ${threadId}.`);
 }
 
-function cmdResolveMyThread(args) {
-  return doResolveThread(args, { checked: true, command: "resolve-my-thread" });
-}
+const RESOLVE_THREAD_OPTIONS = {
+  threadId: {
+    long: "thread-id",
+    map: required,
+    description:
+      "GraphQL node ID of the review thread to resolve (shown by gh-pr-render above each thread).",
+  },
+};
 
-function cmdResolveAnyThread(args) {
-  return doResolveThread(args, {
-    checked: false,
-    command: "resolve-any-thread",
-  });
-}
+COMMANDS.add(
+  "resolve-my-thread",
+  "Resolve an inline-comment thread you started.",
+  RESOLVE_THREAD_OPTIONS,
+  async (options) => doResolveThread({ ...options, checked: true }),
+);
+
+COMMANDS.add(
+  "resolve-any-thread",
+  "Resolve any inline-comment thread, without checking who started it.",
+  RESOLVE_THREAD_OPTIONS,
+  async (options) => doResolveThread({ ...options, checked: false }),
+);
 
 /**
  * Hide a review.
  *
  * `checked` guards against Claude hiding someone else's review.
  */
-async function doHideReview(args, { checked, command }) {
-  const [{ reviewId }] = await getOptions(
-    args,
-    {
-      reviewId: {
-        long: "review-id",
-        map: positiveInt,
-        description: "REST ID of the review to minimize (mark outdated).",
-      },
-    },
-    command,
-  );
-
+async function doHideReview({ checked, reviewId }) {
   const token = requireToken();
   const { owner, repo } = repoFromEnv();
   const pr = prNumberFromEnv();
@@ -541,13 +535,27 @@ async function doHideReview(args, { checked, command }) {
   console.log(`Hid review ${reviewId} as outdated.`);
 }
 
-function cmdHideMyReview(args) {
-  return doHideReview(args, { checked: true, command: "hide-my-review" });
-}
+const HIDE_REVIEW_OPTIONS = {
+  reviewId: {
+    long: "review-id",
+    map: positiveInt,
+    description: "REST ID of the review to minimize (mark outdated).",
+  },
+};
 
-function cmdHideAnyReview(args) {
-  return doHideReview(args, { checked: false, command: "hide-any-review" });
-}
+COMMANDS.add(
+  "hide-my-review",
+  "Minimize (mark outdated) a review you authored.",
+  HIDE_REVIEW_OPTIONS,
+  async (options) => doHideReview({ ...options, checked: true }),
+);
+
+COMMANDS.add(
+  "hide-any-review",
+  "Minimize any review, without checking who authored it.",
+  HIDE_REVIEW_OPTIONS,
+  async (options) => doHideReview({ ...options, checked: false }),
+);
 
 /**
  * Invoked by the deferred fallback step after Claude's run ends, not by
@@ -562,54 +570,53 @@ function cmdHideAnyReview(args) {
  * the Claude App token, since neither circumstance should get to submit an
  * approval sweep never actually watched happen live.
  */
-async function cmdSweep(args) {
-  const [{ forceDowngradeApproval }] = await getOptions(
-    args,
-    {
-      forceDowngradeApproval: {
-        type: "boolean",
-        long: "downgrade-approval",
-        description:
-          "Force any queued APPROVE to submit as COMMENT instead (with an explanatory note appended).",
-      },
+COMMANDS.add(
+  "sweep",
+  "Post anything still queued after Claude's turn ends. Run automatically by action.yaml -- Claude shouldn't call this.",
+  {
+    forceDowngradeApproval: {
+      type: "boolean",
+      long: "downgrade-approval",
+      description:
+        "Force any queued APPROVE to submit as COMMENT instead (with an explanatory note appended).",
     },
-    "sweep",
-  );
+  },
+  async ({ forceDowngradeApproval }) => {
+    const root = queueRoot();
+    let handled = 0;
+    let failed = 0;
 
-  const root = queueRoot();
-  let handled = 0;
-  let failed = 0;
+    const liveClaim = await claim(root);
+    if (liveClaim) {
+      console.log(`Found un-submitted comments queued at ${liveClaim}.`);
+      if (await trySubmit(liveClaim, { forceDowngradeApproval })) handled++;
+      else failed++;
+    }
 
-  const liveClaim = await claim(root);
-  if (liveClaim) {
-    console.log(`Found un-submitted comments queued at ${liveClaim}.`);
-    if (await trySubmit(liveClaim, { forceDowngradeApproval })) handled++;
-    else failed++;
-  }
+    for (const dir of await listClaimed(root)) {
+      console.error(
+        `::warning::Retrying abandoned review submission from ${dir}`,
+      );
+      if (await trySubmit(dir, { forceDowngradeApproval })) handled++;
+      else failed++;
+    }
 
-  for (const dir of await listClaimed(root)) {
-    console.error(
-      `::warning::Retrying abandoned review submission from ${dir}`,
-    );
-    if (await trySubmit(dir, { forceDowngradeApproval })) handled++;
-    else failed++;
-  }
+    if (handled === 0 && failed === 0) {
+      console.log("Nothing to sweep.");
+    } else {
+      console.log(
+        `Swept ${handled} pending submission(s), ${failed} failure(s).`,
+      );
+    }
 
-  if (handled === 0 && failed === 0) {
-    console.log("Nothing to sweep.");
-  } else {
-    console.log(
-      `Swept ${handled} pending submission(s), ${failed} failure(s).`,
-    );
-  }
-
-  if (failed > 0) {
-    process.exitCode = 1;
-  } else {
-    // Only delete queue on success.
-    await cleanup(root);
-  }
-}
+    if (failed > 0) {
+      process.exitCode = 1;
+    } else {
+      // Only delete queue on success.
+      await cleanup(root);
+    }
+  },
+);
 
 async function trySubmit(claimedDir, submitOpts) {
   try {
@@ -635,77 +642,15 @@ async function trySubmit(claimedDir, submitOpts) {
   return true;
 }
 
-const COMMANDS = {
-  init: {
-    handler: cmdInit,
-    description:
-      "Create the queue directory. Run once by action.yaml before Claude's turn starts -- Claude shouldn't call this.",
-  },
-  "queue-inline-comment": {
-    handler: cmdQueueInlineComment,
-    description:
-      "Queue an inline comment on disk. Nothing is posted until a review is finalized.",
-  },
-  "reply-inline-comment": {
-    handler: cmdReplyInlineComment,
-    description:
-      "Reply to an existing inline comment thread. Posts immediately.",
-  },
-  "comment-review": {
-    handler: cmdCommentReview,
-    description: "Submit everything queued as one grouped COMMENT review.",
-  },
-  "approve-review": {
-    handler: cmdApproveReview,
-    description: "Submit everything queued as one grouped APPROVE review.",
-  },
-  "request-changes-review": {
-    handler: cmdRequestChangesReview,
-    description:
-      "Submit everything queued as one grouped REQUEST_CHANGES review.",
-  },
-  "list-queue": {
-    handler: cmdListQueue,
-    description: "Show every batch currently in the queue, in any state.",
-  },
-  "discard-queue": {
-    handler: cmdDiscardQueue,
-    description:
-      "Permanently remove a stuck claimed batch without submitting it.",
-  },
-  "resolve-my-thread": {
-    handler: cmdResolveMyThread,
-    description: "Resolve an inline-comment thread you started.",
-  },
-  "resolve-any-thread": {
-    handler: cmdResolveAnyThread,
-    description:
-      "Resolve any inline-comment thread, without checking who started it.",
-  },
-  "hide-my-review": {
-    handler: cmdHideMyReview,
-    description: "Minimize (mark outdated) a review you authored.",
-  },
-  "hide-any-review": {
-    handler: cmdHideAnyReview,
-    description: "Minimize any review, without checking who authored it.",
-  },
-  sweep: {
-    handler: cmdSweep,
-    description:
-      "Post anything still queued after Claude's turn ends. Run automatically by action.yaml -- Claude shouldn't call this.",
-  },
-};
-
 function formatTopLevelHelp() {
-  const names = Object.keys(COMMANDS);
+  const names = COMMANDS.names();
   const width = Math.max(...names.map((name) => name.length));
   return [
     "Usage: pr-review <command> [options]",
     "",
     "Commands:",
     ...names.map(
-      (name) => `  ${name.padEnd(width)}  ${COMMANDS[name].description}`,
+      (name) => `  ${name.padEnd(width)}  ${COMMANDS.get(name).description}`,
     ),
     "",
     "Run 'pr-review <command> --help' for details on a specific command.",
@@ -719,14 +664,14 @@ async function main() {
     return;
   }
 
-  const entry = COMMANDS[command];
+  const entry = COMMANDS.get(command);
   if (!entry) {
     fail(
       `Unknown command: ${command}. Expected one of: ` +
-        Object.keys(COMMANDS).join(", "),
+        COMMANDS.names().join(", "),
     );
   }
-  await entry.handler(rest);
+  await entry(rest);
 }
 
 main().catch((error) => {
@@ -734,7 +679,10 @@ main().catch((error) => {
     console.log(error.message);
     return;
   }
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`Error: ${message}`);
+  if (error instanceof CliError) {
+    console.error(`Error: ${error.message}`);
+  } else {
+    console.error(error);
+  }
   process.exit(1);
 });
