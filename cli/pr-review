@@ -91,7 +91,8 @@ async function readBodyFile(path, long, info) {
  */
 COMMANDS.add(
   "init",
-  "Create the queue directory. Run once by action.yaml before Claude's turn starts -- Claude shouldn't call this.",
+  "Create the queue directory. Run once by action.yaml before Claude's turn " +
+    "starts. Claude shouldn't call this.",
   {},
   async () => {
     const root = queueRoot();
@@ -113,7 +114,7 @@ COMMANDS.add(
 
 COMMANDS.add(
   "queue-inline-comment",
-  "Queue an inline comment on disk. Nothing is posted until a review is finalized.",
+  "Queue an inline comment. Nothing is posted until a review is finalized.",
   {
     path: {
       map: required,
@@ -123,18 +124,21 @@ COMMANDS.add(
     line: {
       map: positiveInt,
       description:
-        "Line number in the file's new version (or old version, if --side LEFT) to attach the comment to. Must be part of the diff.",
+        "Line number in the file's new version (or old version, if " +
+        "--side LEFT) to attach the comment to. Must be part of the diff.",
     },
     startLine: {
       long: "start-line",
       description:
-        "Start of a multi-line comment range; the comment covers --start-line through --line. Omit for a single-line comment.",
+        "Start of a multi-line comment range; the comment covers " +
+        "--start-line through --line. Omit for a single-line comment.",
     },
     side: {
       map: oneOf("LEFT", "RIGHT"),
       default: "RIGHT",
       description:
-        "Which version of the diff --line/--start-line refer to: RIGHT is the new version, LEFT is the old.",
+        "Which version of the diff --line/--start-line refer to: RIGHT is " +
+        "the new version, LEFT is the old.",
     },
     body: {
       long: "body-file",
@@ -313,7 +317,8 @@ COMMANDS.add(
       long: "body-file",
       map: readBodyFile,
       description:
-        "Path to a file containing the top-level review body. Optional -- omit for an inline-comments-only review.",
+        "Path to a file containing the top-level review body. Optional; omit " +
+        "for an inline-comments-only review.",
     },
   },
   async ({ body }) => {
@@ -325,7 +330,8 @@ COMMANDS.add(
       );
     }
     console.log(
-      `Submitted review with ${comments.length} inline comment(s): ${result.html_url}`,
+      `Submitted review with ${comments.length} inline comment(s): ` +
+        result.html_url,
     );
   },
 );
@@ -338,14 +344,16 @@ COMMANDS.add(
       long: "body-file",
       map: readBodyFile,
       description:
-        "Path to a file containing the top-level review body. Optional -- omit for an inline-comments-only approval.",
+        "Path to a file containing the top-level review body. Optional; omit " +
+        "for an inline-comments-only approval.",
     },
   },
   async ({ body }) => {
     const { comments, event, result } = await finalizeReview("APPROVE", body);
     if (event === "APPROVE") {
       console.log(
-        `Submitted APPROVE review with ${comments.length} inline comment(s): ${result.html_url}`,
+        `Submitted APPROVE review with ${comments.length} inline comment(s): ` +
+          result.html_url,
       );
     } else {
       console.log(
@@ -365,13 +373,15 @@ COMMANDS.add(
       map: readBodyFile,
       required: true,
       description:
-        "Path to a file containing the top-level review body, explaining what must change.",
+        "Path to a file containing the top-level review body, explaining " +
+        "what must change.",
     },
   },
   async ({ body }) => {
     const { comments, result } = await finalizeReview("REQUEST_CHANGES", body);
     console.log(
-      `Submitted REQUEST_CHANGES review with ${comments.length} inline comment(s): ${result.html_url}`,
+      `Submitted REQUEST_CHANGES review with ${comments.length} inline ` +
+        `comment(s): ${result.html_url}`,
     );
   },
 );
@@ -435,7 +445,8 @@ COMMANDS.add(
     dir: {
       map: required,
       description:
-        "Path to the claimed batch directory to discard, exactly as printed by list-queue.",
+        "Path to the claimed batch directory to discard, exactly as printed " +
+        "by list-queue.",
     },
   },
   async ({ dir }) => {
@@ -487,7 +498,8 @@ const RESOLVE_THREAD_OPTIONS = {
     long: "thread-id",
     map: required,
     description:
-      "GraphQL node ID of the review thread to resolve (shown by gh-pr-render above each thread).",
+      "GraphQL node ID of the review thread to resolve (shown by " +
+      "gh-pr-render above each thread).",
   },
 };
 
@@ -572,13 +584,15 @@ COMMANDS.add(
  */
 COMMANDS.add(
   "sweep",
-  "Post anything still queued after Claude's turn ends. Run automatically by action.yaml -- Claude shouldn't call this.",
+  "Post anything still queued after Claude's turn ends. Run automatically by " +
+    "action.yaml; Claude shouldn't call this.",
   {
     forceDowngradeApproval: {
       type: "boolean",
       long: "downgrade-approval",
       description:
-        "Force any queued APPROVE to submit as COMMENT instead (with an explanatory note appended).",
+        "Force any queued APPROVE to submit as COMMENT instead (with an " +
+        "explanatory note appended).",
     },
   },
   async ({ forceDowngradeApproval }) => {
@@ -633,8 +647,8 @@ async function trySubmit(claimedDir, submitOpts) {
     await markPosted(claimedDir);
   } catch (error) {
     console.error(
-      `::warning::Successfully submitted ${claimedDir}, but could not mark it ` +
-        `posted: ${error}`,
+      `::warning::Successfully submitted ${claimedDir}, but could not mark ` +
+        `it posted: ${error}`,
     );
     return false;
   }
