@@ -308,15 +308,30 @@ describe("pr-review CLI", () => {
     );
   });
 
+  it("request-changes-review requires content", async () => {
+    await withMockGitHub(async ({ requests }) => {
+      await expect(run(["request-changes-review"])).rejects.toThrow(
+        /Nothing to submit/,
+      );
+      expect(requests).toHaveLength(0);
+    });
+  });
+
   it("request-changes-review does not require --body-file", async () => {
     await withMockGitHub(
       responses.GET_pull(5, "deadbeef"),
       responses.POST_review(5, 115),
 
       async ({ requests }) => {
+        await runQueueInlineComment(
+          "foo.js",
+          "10",
+          await bodyFile("this is broken"),
+        );
+
         const { stdout } = await run(["request-changes-review"]);
         expect(stdout).toMatch(
-          /Submitted REQUEST_CHANGES review with 0 inline comment/,
+          /Submitted REQUEST_CHANGES review with 1 inline comment/,
         );
 
         const [reviewRequest] = filterByUrlEnd(requests, "/reviews");
@@ -324,11 +339,12 @@ describe("pr-review CLI", () => {
           event: "REQUEST_CHANGES",
           body: "",
         });
+        expect(reviewRequest.body.comments).toHaveLength(1);
       },
     );
   });
 
-  it("request-changes-review posts a REQUEST_CHANGES event with queued inline comments", async () => {
+  it("request-changes-review posts a REQUEST_CHANGES event with top level and inline comments", async () => {
     await withMockGitHub(
       responses.GET_pull(5, "deadbeef"),
       responses.POST_review(5, 117),
@@ -355,6 +371,31 @@ describe("pr-review CLI", () => {
           body: "Please address the security issue.",
         });
         expect(reviewRequest.body.comments).toHaveLength(1);
+      },
+    );
+  });
+
+  it("request-changes-review posts a REQUEST_CHANGES event with top level and no inline comments", async () => {
+    await withMockGitHub(
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 117),
+
+      async ({ requests }) => {
+        const { stdout } = await run([
+          "request-changes-review",
+          "--body-file",
+          await bodyFile("Please address the security issue."),
+        ]);
+        expect(stdout).toMatch(
+          /Submitted REQUEST_CHANGES review with 0 inline comment/,
+        );
+
+        const [reviewRequest] = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequest.body).toMatchObject({
+          event: "REQUEST_CHANGES",
+          body: "Please address the security issue.",
+        });
+        expect(reviewRequest.body.comments).toHaveLength(0);
       },
     );
   });

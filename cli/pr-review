@@ -218,6 +218,9 @@ const DOWNGRADE_FORCED_NOTE =
  * before ever calling the API. Independent of that flag, an APPROVE that GitHub
  * itself rejects because the token isn't permitted to approve is always retried
  * as a COMMENT to avoid losing content.
+ *
+ * This will do nothing and return `skipped: true` for REQUEST_CHANGES and
+ * COMMENT reviews if there are no queued inline comments and no review body.
  */
 async function submitClaimedBatch(claimedDir, { forceDowngradeApproval } = {}) {
   const { comments, body, event } = await readBatch(claimedDir);
@@ -225,7 +228,11 @@ async function submitClaimedBatch(claimedDir, { forceDowngradeApproval } = {}) {
   const { owner, repo } = repoFromEnv();
   const pr = prNumberFromEnv();
 
-  if (event === "COMMENT" && comments.length === 0 && !body) {
+  if (
+    (event === "COMMENT" || event === "REQUEST_CHANGES") &&
+    comments.length === 0 &&
+    !body
+  ) {
     // Nothing worth posting (shouldn't normally happen).
     return { comments, event, skipped: true };
   }
@@ -273,8 +280,9 @@ async function submitClaimedBatch(claimedDir, { forceDowngradeApproval } = {}) {
  *
  * If another subagent runs this at the same time, the winner will submit its
  * review with the queued comments, while the loser will only have the review.
- * If the loser has a COMMENT review with no body, then it will return
- * `skipped: true`, otherwise the review will be submitted with no comments.
+ *
+ * This will fail for COMMENT and REQUEST_CHANGES reviews if there are no queued
+ * inline comments and the review body is empty.
  */
 async function finalizeReview(event, body) {
   const claimedDir = await claim(queueRoot(), { create: true });
@@ -307,6 +315,13 @@ async function finalizeReview(event, body) {
     );
   }
 
+  if (result.skipped) {
+    fail(
+      "Nothing to submit: call queue-inline-comment first, or pass " +
+        "--body-file for top-level-only feedback.",
+    );
+  }
+
   return result;
 }
 
@@ -323,13 +338,7 @@ COMMANDS.add(
     },
   },
   async ({ body }) => {
-    const { comments, result, skipped } = await finalizeReview("COMMENT", body);
-    if (skipped) {
-      fail(
-        "Nothing to submit: call queue-inline-comment first, or pass " +
-          "--body-file for top-level-only feedback.",
-      );
-    }
+    const { comments, result } = await finalizeReview("COMMENT", body);
     console.log(
       `Submitted review with ${comments.length} inline comment(s): ` +
         result.html_url,
