@@ -308,13 +308,24 @@ describe("pr-review CLI", () => {
     );
   });
 
-  it("request-changes-review requires --body-file", async () => {
-    await withMockGitHub(async ({ requests }) => {
-      await expect(run(["request-changes-review"])).rejects.toThrow(
-        /--body-file is required/,
-      );
-      expect(requests).toHaveLength(0);
-    });
+  it("request-changes-review does not require --body-file", async () => {
+    await withMockGitHub(
+      responses.GET_pull(5, "deadbeef"),
+      responses.POST_review(5, 115),
+
+      async ({ requests }) => {
+        const { stdout } = await run(["request-changes-review"]);
+        expect(stdout).toMatch(
+          /Submitted REQUEST_CHANGES review with 0 inline comment/,
+        );
+
+        const [reviewRequest] = filterByUrlEnd(requests, "/reviews");
+        expect(reviewRequest.body).toMatchObject({
+          event: "REQUEST_CHANGES",
+          body: "",
+        });
+      },
+    );
   });
 
   it("request-changes-review posts a REQUEST_CHANGES event with queued inline comments", async () => {
@@ -820,7 +831,7 @@ describe("pr-review CLI", () => {
     // No --body-file given, and none created -- --help must win before
     // readBodyFile() would otherwise fail trying to read a missing file.
     const { stdout } = await run(["request-changes-review", "--help"]);
-    expect(stdout).toMatch(/--body-file BODY_FILE\s+\(required\)/);
+    expect(stdout).toMatch(/--body-file BODY_FILE/);
   });
 
   it("unknown command still fails and lists the available commands", async () => {

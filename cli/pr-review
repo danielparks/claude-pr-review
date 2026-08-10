@@ -371,10 +371,9 @@ COMMANDS.add(
     body: {
       long: "body-file",
       map: readBodyFile,
-      required: true,
       description:
-        "Path to a file containing the top-level review body, explaining " +
-        "what must change.",
+        "Path to a file containing the top-level review body. Optional; omit " +
+        "if inline comments cover all requested changes.",
     },
   },
   async ({ body }) => {
