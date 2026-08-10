@@ -92,7 +92,8 @@ async function readBodyFile(path, long, info) {
 COMMANDS.add(
   "init",
   "Create the queue directory. Run once by action.yaml before Claude's turn " +
-    "starts. Claude shouldn't call this.",
+    "starts. Claude shouldn't call this and it is not enabled as an " +
+    "allowed-tool by default.",
   {},
   async () => {
     const root = queueRoot();
@@ -338,7 +339,8 @@ COMMANDS.add(
 
 COMMANDS.add(
   "approve-review",
-  "Submit everything queued as one grouped APPROVE review.",
+  "Submit everything queued as one grouped APPROVE review. This is not " +
+    "enabled as an allowed-tool by default.",
   {
     body: {
       long: "body-file",
@@ -366,7 +368,8 @@ COMMANDS.add(
 
 COMMANDS.add(
   "request-changes-review",
-  "Submit everything queued as one grouped REQUEST_CHANGES review.",
+  "Submit everything queued as one grouped REQUEST_CHANGES review. This is " +
+    "not enabled as an allowed-tool by default.",
   {
     body: {
       long: "body-file",
@@ -504,14 +507,16 @@ const RESOLVE_THREAD_OPTIONS = {
 
 COMMANDS.add(
   "resolve-my-thread",
-  "Resolve an inline-comment thread you started.",
+  "Resolve an inline-comment thread you started. This is not enabled as an " +
+    "allowed-tool by default.",
   RESOLVE_THREAD_OPTIONS,
   async (options) => doResolveThread({ ...options, checked: true }),
 );
 
 COMMANDS.add(
   "resolve-any-thread",
-  "Resolve any inline-comment thread, without checking who started it.",
+  "Resolve any inline-comment thread, without checking who started it. This " +
+    "is not enabled as an allowed-tool by default.",
   RESOLVE_THREAD_OPTIONS,
   async (options) => doResolveThread({ ...options, checked: false }),
 );
@@ -556,14 +561,16 @@ const HIDE_REVIEW_OPTIONS = {
 
 COMMANDS.add(
   "hide-my-review",
-  "Minimize (mark outdated) a review you authored.",
+  "Minimize (mark outdated) a review you authored. This is not enabled as an " +
+    "allowed-tool by default.",
   HIDE_REVIEW_OPTIONS,
   async (options) => doHideReview({ ...options, checked: true }),
 );
 
 COMMANDS.add(
   "hide-any-review",
-  "Minimize any review, without checking who authored it.",
+  "Minimize any review, without checking who authored it. This is not " +
+    "enabled as an allowed-tool by default.",
   HIDE_REVIEW_OPTIONS,
   async (options) => doHideReview({ ...options, checked: false }),
 );
@@ -584,7 +591,8 @@ COMMANDS.add(
 COMMANDS.add(
   "sweep",
   "Post anything still queued after Claude's turn ends. Run automatically by " +
-    "action.yaml; Claude shouldn't call this.",
+    "action.yaml; Claude shouldn't call this and it is not enabled as an " +
+    "allowed-tool by default.",
   {
     forceDowngradeApproval: {
       type: "boolean",
