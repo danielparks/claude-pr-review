@@ -6,9 +6,7 @@
 // tool, Claude Code denies it with a generic built-in message. This server
 // has exactly one job: deny every call, naming the specific tool (and, for
 // Bash, the actual command) and saying plainly that it's a permissions
-// restriction, so Claude doesn't mistake the denial for a missing command, a
-// crash, or some other failure -- see the "clarify a denial" section of
-// README.md for why that distinction matters.
+// restriction.
 //
 // This *is* an MCP server, unlike pr-review itself -- see "Why Bash instead
 // of MCP" in README.md. That reasoning doesn't apply here: this server never
@@ -65,13 +63,12 @@ function buildDenialMessage(toolName, input) {
   let message =
     `${display} is not in the allowed-tools list. This is a workflow ` +
     "permissions restriction (this action's allowed-tools / " +
-    "additional-allowed-tools inputs) -- not a missing command, a crash, " +
-    "or a bug.";
+    "additional-allowed-tools inputs).";
 
   if (toolName === "Bash" && command?.includes("pr-review")) {
     message +=
       " `pr-review --help` (always allowed) lists every subcommand; ones " +
-      "not enabled by default say so in their own description.";
+      "not enabled by default say so in their description.";
   }
 
   return message;

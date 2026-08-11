@@ -102,8 +102,7 @@ describe("pr-review-permission-prompt", () => {
       message:
         "WebFetch is not in the allowed-tools list. This is a workflow " +
         "permissions restriction (this action's allowed-tools / " +
-        "additional-allowed-tools inputs) -- not a missing command, a crash, " +
-        "or a bug.",
+        "additional-allowed-tools inputs).",
     });
   });
 

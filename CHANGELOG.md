@@ -32,7 +32,7 @@ All notable changes to this project will be documented in this file.
   - `hide-my-review`: minimize a stale top-level review as outdated. Fails if the review was authored by another user.
   - `request-changes-review`: submit a review requesting changes.
   - `approve-review`: submit a review approving the changes. If there is a problem with the Claude run, or if we don’t get the `claude[bot]` token, then the review will be downgraded to a comment with a note.
-- Added a `--permission-prompt-tool` MCP server (`cli/pr-review-permission-prompt`) so a tool call that falls outside `allowed-tools` gets a clear denial message instead of Claude Code’s generic one — naming the actual Bash command, saying outright that it's a permissions restriction rather than a missing command or a crash, and, for `pr-review` commands, pointing at `pr-review --help` to see what's opt-in.
+- Added a `--permission-prompt-tool` MCP server (`cli/pr-review-permission-prompt`) so a tool call that falls outside `allowed-tools` gets a clear denial message instead of Claude Code’s generic one.
 - Removed `bot-username` input (no longer needed).
 
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
