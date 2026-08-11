@@ -58,7 +58,7 @@ describe("pr-review-permission-prompt", () => {
     expect(tool.inputSchema.required).toEqual(["tool_name", "input"]);
   });
 
-  it("denies every tools/call, naming the tool", async () => {
+  async function checkCall(toolName, input) {
     const responses = await run([
       {
         jsonrpc: "2.0",
@@ -66,16 +66,51 @@ describe("pr-review-permission-prompt", () => {
         method: "tools/call",
         params: {
           name: "check",
-          arguments: { tool_name: "Bash(rm -rf /)", input: {} },
+          arguments: { tool_name: toolName, input },
         },
       },
     ]);
+    return JSON.parse(responses[0].result.content[0].text);
+  }
 
-    const decision = JSON.parse(responses[0].result.content[0].text);
+  it("denies a Bash call, naming the actual command", async () => {
+    const decision = await checkCall("Bash", { command: "rm -rf /" });
+
+    expect(decision.behavior).toBe("deny");
+    expect(decision.message).toMatch(/^Bash\(rm -rf \/\) is not in the/);
+    expect(decision.message).toMatch(/permissions restriction/);
+    expect(decision.message).not.toMatch(/pr-review --help/); // Not a pr-review command.
+  });
+
+  it("points a denied pr-review Bash call at `pr-review --help`", async () => {
+    const decision = await checkCall("Bash", {
+      command: "pr-review request-changes-review --help",
+    });
+
+    expect(decision.behavior).toBe("deny");
+    expect(decision.message).toMatch(
+      /^Bash\(pr-review request-changes-review --help\) is not in the/,
+    );
+    expect(decision.message).toMatch(/pr-review --help/);
+  });
+
+  it("denies a non-Bash call by its bare tool name", async () => {
+    const decision = await checkCall("WebFetch", { url: "https://x.test" });
+
     expect(decision).toEqual({
       behavior: "deny",
-      message: "Bash(rm -rf /) is not in the allowed-tools list.",
+      message:
+        "WebFetch is not in the allowed-tools list. This is a workflow " +
+        "permissions restriction (this action's allowed-tools / " +
+        "additional-allowed-tools inputs) -- not a missing command, a crash, " +
+        "or a bug.",
     });
+  });
+
+  it("falls back to the bare tool name if Bash input has no command", async () => {
+    const decision = await checkCall("Bash", {});
+
+    expect(decision.message).toMatch(/^Bash is not in the/);
   });
 
   it("errors on a tools/call for an unknown tool", async () => {

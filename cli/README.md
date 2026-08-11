@@ -10,9 +10,17 @@ This isn’t reaching around anything Anthropic didn’t already intend: it’s 
 
 ## `pr-review-permission-prompt`
 
-`action.yaml` also passes Claude Code `--permission-prompt-tool mcp__pr-review-permission-prompt__check`, backed by `cli/pr-review-permission-prompt`. In `-p` (headless) mode there's no terminal to prompt, so a tool call that isn't covered by `--allowedTools` has nowhere to go; without a permission prompt tool, Claude Code denies it with a generic built-in message. This server's only job is to deny every call it's asked about, naming the specific tool, so that message is legible instead: `<tool> is not in the allowed-tools list.`
+`action.yaml` also passes Claude Code `--permission-prompt-tool mcp__pr-review-permission-prompt__check`, backed by `cli/pr-review-permission-prompt`. In `-p` (headless) mode there's no terminal to prompt, so a tool call that isn't covered by `--allowedTools` has nowhere to go; without a permission prompt tool, Claude Code denies it with a generic built-in message. This server's only job is to deny every call it's asked about, naming the specific tool, so that message is legible instead.
 
 This one _is_ an MCP server, unlike `pr-review` itself — see “Why Bash instead of MCP” above. That reasoning doesn't apply here: it never touches `GITHUB_TOKEN` or any other secret, since it never calls GitHub. It also has no state to manage and is invoked synchronously once per denied call, so hand-rolling the MCP stdio JSON-RPC framing (see the script itself) is simpler than adding `@modelcontextprotocol/sdk` as a dependency for it.
+
+### Clarifying a denial
+
+A denial message that just says `Bash is not in the allowed-tools list.` reads enough like a generic error that Claude has, in practice, taken it as a sign the command was missing, uninstalled, or crashed, rather than a deliberate scoping choice — especially for something like `pr-review request-changes-review --help`, which is a completely ordinary, read-only invocation of a real, installed command that simply isn't opted in by default (see “Opt-in tools” below). So the message instead:
+
+- Names the actual denied Bash command (`Bash(pr-review request-changes-review --help)`), not just the bare tool name, so Claude can see exactly what was attempted.
+- Says outright that this is a workflow permissions restriction, not a missing command, a crash, or a bug.
+- For a denied `pr-review` command specifically, points at `pr-review --help` (always allowed) — every opt-in subcommand already says “This is not enabled as an allowed-tool by default” in its own `--help` description (see `cli/pr-review`’s `COMMANDS.add` calls), so Claude can self-serve the rest of the picture instead of guessing.
 
 ## Why no build step
 

@@ -4,8 +4,11 @@
 // mode there is no terminal to prompt, so any tool call that isn't covered by
 // `--allowedTools` needs somewhere else to go; without a permission prompt
 // tool, Claude Code denies it with a generic built-in message. This server
-// has exactly one job: deny every call, naming the specific tool, so that
-// message is legible instead.
+// has exactly one job: deny every call, naming the specific tool (and, for
+// Bash, the actual command) and saying plainly that it's a permissions
+// restriction, so Claude doesn't mistake the denial for a missing command, a
+// crash, or some other failure -- see the "clarify a denial" section of
+// README.md for why that distinction matters.
 //
 // This *is* an MCP server, unlike pr-review itself -- see "Why Bash instead
 // of MCP" in README.md. That reasoning doesn't apply here: this server never
@@ -46,6 +49,34 @@ function respondError(id, code, message) {
   );
 }
 
+// A bare tool name ("Bash") doesn't tell Claude *which* Bash command was
+// denied, and "not in the allowed-tools list" reads enough like a generic
+// error that Claude has, in practice, mistaken it for the command being
+// missing, uninstalled, or broken rather than a deliberate scoping choice.
+// Naming the actual command, and saying outright that this is a permissions
+// restriction, heads that off; the pr-review-specific pointer below reuses
+// the "not enabled as an allowed-tool by default" notes already in each
+// opt-in subcommand's own `--help` text (see cli/pr-review's COMMANDS).
+function buildDenialMessage(toolName, input) {
+  const command = typeof input?.command === "string" ? input.command : null;
+  const display =
+    toolName === "Bash" && command ? `Bash(${command})` : toolName;
+
+  let message =
+    `${display} is not in the allowed-tools list. This is a workflow ` +
+    "permissions restriction (this action's allowed-tools / " +
+    "additional-allowed-tools inputs) -- not a missing command, a crash, " +
+    "or a bug.";
+
+  if (toolName === "Bash" && command?.includes("pr-review")) {
+    message +=
+      " `pr-review --help` (always allowed) lists every subcommand; ones " +
+      "not enabled by default say so in their own description.";
+  }
+
+  return message;
+}
+
 function handleMessage(message) {
   const { id, method, params } = message;
   const isRequest = id !== undefined && id !== null;
@@ -73,13 +104,14 @@ function handleMessage(message) {
       }
 
       const toolName = params?.arguments?.tool_name ?? "This tool";
+      const input = params?.arguments?.input;
       respond(id, {
         content: [
           {
             type: "text",
             text: JSON.stringify({
               behavior: "deny",
-              message: `${toolName} is not in the allowed-tools list.`,
+              message: buildDenialMessage(toolName, input),
             }),
           },
         ],
