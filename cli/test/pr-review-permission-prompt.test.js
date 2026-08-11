@@ -91,7 +91,7 @@ describe("pr-review-permission-prompt", () => {
     expect(responses[0].error.code).toBe(-32602);
   });
 
-  it("ignores unparseable lines instead of crashing", async () => {
+  it("ignores unparsable lines instead of crashing", async () => {
     const responses = await run([
       "not json",
       { jsonrpc: "2.0", id: 1, method: "tools/list" },

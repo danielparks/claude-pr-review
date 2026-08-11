@@ -12,7 +12,7 @@ This isn’t reaching around anything Anthropic didn’t already intend: it’s 
 
 `action.yaml` also passes Claude Code `--permission-prompt-tool mcp__pr-review-permission-prompt__check`, backed by `cli/pr-review-permission-prompt`. In `-p` (headless) mode there's no terminal to prompt, so a tool call that isn't covered by `--allowedTools` has nowhere to go; without a permission prompt tool, Claude Code denies it with a generic built-in message. This server's only job is to deny every call it's asked about, naming the specific tool, so that message is legible instead: `<tool> is not in the allowed-tools list.`
 
-This one *is* an MCP server, unlike `pr-review` itself — see “Why Bash instead of MCP” above. That reasoning doesn't apply here: it never touches `GITHUB_TOKEN` or any other secret, since it never calls GitHub. It also has no state to manage and is invoked synchronously once per denied call, so hand-rolling the MCP stdio JSON-RPC framing (see the script itself) is simpler than adding `@modelcontextprotocol/sdk` as a dependency for it.
+This one _is_ an MCP server, unlike `pr-review` itself — see “Why Bash instead of MCP” above. That reasoning doesn't apply here: it never touches `GITHUB_TOKEN` or any other secret, since it never calls GitHub. It also has no state to manage and is invoked synchronously once per denied call, so hand-rolling the MCP stdio JSON-RPC framing (see the script itself) is simpler than adding `@modelcontextprotocol/sdk` as a dependency for it.
 
 ## Why no build step
 
