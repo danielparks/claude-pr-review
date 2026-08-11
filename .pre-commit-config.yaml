@@ -30,6 +30,7 @@ repos:
         language: system
         entry: scripts/format --check
         pass_filenames: true
+        require_serial: true
         types_or: [javascript, ts, json, markdown, yaml]
         stages: [pre-commit, pre-merge-commit]
       - id: cli-check
