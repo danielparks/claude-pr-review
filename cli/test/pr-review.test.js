@@ -930,11 +930,34 @@ describe("pr-review CLI", () => {
     expect(stdout).toMatch(
       /discard-queue\s+Permanently remove a stuck claimed batch/,
     );
+    expect(stdout).not.toMatch(/Not enabled for this run:/);
   });
 
   it("running with no command at all also shows top-level help", async () => {
     const { stdout } = await run([]);
     expect(stdout).toMatch(/Usage: pr-review <command> \[options\]/);
+  });
+
+  it("--help with PR_REVIEW_ALLOWED_SUBCOMMANDS set only shows those commands", async () => {
+    const { stdout } = await run(["--help"], {
+      PR_REVIEW_ALLOWED_SUBCOMMANDS:
+        "queue-inline-comment,reply-inline-comment,comment-review",
+    });
+    expect(stdout).toMatch(/queue-inline-comment\s+Queue an inline comment/);
+    expect(stdout).toMatch(/comment-review\s+Submit/);
+    expect(stdout).not.toMatch(/^\s+discard-queue\s/m);
+    expect(stdout).toMatch(/Not enabled for this run:.*discard-queue/);
+  });
+
+  it("--help with PR_REVIEW_ALLOWED_SUBCOMMANDS shows all commands when env var is empty", async () => {
+    const { stdout } = await run(["--help"], {
+      PR_REVIEW_ALLOWED_SUBCOMMANDS: "",
+    });
+    expect(stdout).toMatch(/queue-inline-comment\s+Queue an inline comment/);
+    expect(stdout).toMatch(
+      /discard-queue\s+Permanently remove a stuck claimed batch/,
+    );
+    expect(stdout).not.toMatch(/Not enabled for this run:/);
   });
 
   it("<command> --help shows that command's flags, descriptions, and exits 0, without calling the API", async () => {

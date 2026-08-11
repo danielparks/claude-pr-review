@@ -205,6 +205,7 @@ runs:
       env:
         CLI_DIR: ${{ github.action_path }}/cli
         PR_NUMBER: ${{ github.event.pull_request.number }}
+        ALLOWED_TOOLS_LIST: ${{ steps.tools.outputs.list }}
       run: | # zizmor: ignore[github-env] not user input
         # Put pr-review (see cli/README.md) on PATH for Claude's Bash tool, and
         # expose PR_NUMBER as an ambient env var. GITHUB_TOKEN is set by Claude
@@ -213,6 +214,22 @@ runs:
         echo "$CLI_DIR" >> "$GITHUB_PATH"
         echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
         node "$CLI_DIR/pr-review" init
+
+        # Extract enabled pr-review subcommands from allowed-tools and expose
+        # them so `pr-review --help` can filter its output to only what Claude
+        # is actually allowed to run.
+        PR_REVIEW_ALLOWED_SUBCOMMANDS=$(node -e '
+          const tools = process.env.ALLOWED_TOOLS_LIST ?? "";
+          const subcommands = [];
+          for (const tool of tools.split(",")) {
+            const match = tool.trim().match(/^Bash\(pr-review ([a-z-]+):\*\)$/);
+            if (match) subcommands.push(match[1]);
+          }
+          process.stdout.write(subcommands.join(","));
+        ')
+        if [ -n "$PR_REVIEW_ALLOWED_SUBCOMMANDS" ]; then
+          echo "PR_REVIEW_ALLOWED_SUBCOMMANDS=$PR_REVIEW_ALLOWED_SUBCOMMANDS" >> "$GITHUB_ENV"
+        fi
 
         # Scratch space for Claude to stage --body-file content in.
         mkdir -p /tmp/pr-review-scratch

@@ -723,18 +723,47 @@ async function trySubmit(claimedDir, submitOpts) {
 }
 
 function formatTopLevelHelp() {
-  const names = COMMANDS.names();
+  const allowedEnv = process.env.PR_REVIEW_ALLOWED_SUBCOMMANDS;
+  const allowedSet =
+    allowedEnv && allowedEnv.trim()
+      ? new Set(
+          allowedEnv
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        )
+      : null;
+
+  const allNames = COMMANDS.names();
+  const names =
+    allowedSet && allowedSet.size > 0
+      ? allNames.filter((n) => allowedSet.has(n))
+      : allNames;
+  const disabledNames =
+    allowedSet && names.length < allNames.length
+      ? allNames.filter((n) => !allowedSet.has(n))
+      : [];
+
   const width = Math.max(...names.map((name) => name.length));
-  return [
+  const lines = [
     "Usage: pr-review <command> [options]",
     "",
     "Commands:",
     ...names.map(
       (name) => `  ${name.padEnd(width)}  ${COMMANDS.get(name).description}`,
     ),
-    "",
+  ];
+
+  if (disabledNames.length > 0) {
+    lines.push("");
+    lines.push(`Not enabled for this run: ${disabledNames.join(", ")}`);
+  }
+
+  lines.push("");
+  lines.push(
     "Run 'pr-review <command> --help' for details on a specific command.",
-  ].join("\n");
+  );
+  return lines.join("\n");
 }
 
 async function main() {
