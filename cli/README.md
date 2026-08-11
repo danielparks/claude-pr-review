@@ -14,9 +14,9 @@ This has zero runtime dependencies — it’s plain JavaScript using the built-i
 
 ## `--help`
 
-`pr-review --help` (or `-h`, or running with no command at all) lists every command with a one-line description. `pr-review <command> --help` shows that command's flags, each with its own description, whether it's required, and its default if it has one. Both exit `0`, and `--help` always wins over parsing the rest of the command line — it's checked before any flag's value is read or validated, so it works even if other required flags are missing.
+`pr-review --help` (or `-h`, or running with no command at all) lists every command with a one-line description. `pr-review <command> --help` shows that command’s flags, each with its own description, whether it’s required, and its default if it has one. Both exit `0`, and `--help` always wins over parsing the rest of the command line — it’s checked before any flag’s value is read or validated, so it works even if other required flags are missing.
 
-Usage text is generated from the same `definitions` object (and the same `COMMANDS` map) each command already uses to parse and dispatch -- see `lib/args.js`'s `formatCommandHelp()` and `pr-review`'s `formatTopLevelHelp()` -- via a `description` field on each option and each command entry. Since the description lives right next to the thing it describes, it can't drift out of sync with what a command actually accepts the way separate prose documentation could.
+Usage text is generated from the same `definitions` object (and the same `COMMANDS` map) each command already uses to parse and dispatch — see `lib/args.js`’s `formatCommandHelp()` and `pr-review`’s `formatTopLevelHelp()` — via a `description` field on each option and each command entry. Since the description lives right next to the thing it describes, it can’t drift out of sync with what a command actually accepts the way separate prose documentation could.
 
 ## Why a queue directory instead of an in-memory batch
 
