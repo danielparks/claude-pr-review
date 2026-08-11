@@ -932,6 +932,46 @@ describe("pr-review CLI", () => {
     );
   });
 
+  it("--help with PR_REVIEW_ALLOWED_TOOLS shows only enabled subcommands", async () => {
+    const { stdout } = await run(["--help"], {
+      PR_REVIEW_ALLOWED_TOOLS: [
+        "Read",
+        "Bash(pr-review queue-inline-comment:*)",
+        "Bash(pr-review comment-review:*)",
+      ].join("\n"),
+    });
+    expect(stdout).toMatch(/queue-inline-comment\s+Queue an inline comment/);
+    expect(stdout).toMatch(/comment-review\s+Submit everything queued/);
+    // approve-review appears in the footer but not as a runnable command entry
+    expect(stdout).not.toMatch(/^\s+approve-review\s/m);
+    expect(stdout).toMatch(/Not enabled for this run:.*approve-review/);
+  });
+
+  it("--help with PR_REVIEW_ALLOWED_TOOLS=Bash shows all subcommands", async () => {
+    const { stdout } = await run(["--help"], {
+      PR_REVIEW_ALLOWED_TOOLS: "Bash",
+    });
+    expect(stdout).toMatch(/queue-inline-comment\s+Queue an inline comment/);
+    expect(stdout).toMatch(/approve-review/);
+    expect(stdout).not.toMatch(/Not enabled for this run/);
+  });
+
+  it("--help with PR_REVIEW_ALLOWED_TOOLS glob pattern matches subcommands", async () => {
+    const { stdout } = await run(["--help"], {
+      PR_REVIEW_ALLOWED_TOOLS: [
+        "Bash(pr-review *-review:*)",
+        "Bash(pr-review queue-inline-comment:*)",
+        "Bash(pr-review reply-inline-comment:*)",
+        "Bash(pr-review comment-review:*)",
+        "Bash(pr-review list-queue:*)",
+        "Bash(pr-review discard-queue:*)",
+      ].join("\n"),
+    });
+    expect(stdout).toMatch(/approve-review/);
+    expect(stdout).toMatch(/request-changes-review/);
+    expect(stdout).not.toMatch(/Not enabled for this run:.*approve-review/);
+  });
+
   it("running with no command at all also shows top-level help", async () => {
     const { stdout } = await run([]);
     expect(stdout).toMatch(/Usage: pr-review <command> \[options\]/);

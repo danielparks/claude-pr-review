@@ -71,6 +71,15 @@ inputs:
     description: >
       List of tools to allow Claude to use, one per line. Lines starting with
       `#` will be stripped. Passed to `--allowedTools`.
+
+      `pr-review --help` uses this list to show only the `pr-review`
+      subcommands Claude is permitted to call. It checks each subcommand by
+      matching `pr-review <name>` against the command prefix of each
+      `Bash(prefix:*)` pattern (glob `*` supported). Patterns that restrict
+      specific arguments — e.g. `Bash(pr-review update-sticky-comment
+      --body-file *)` — are not recognized as enabling that subcommand, since
+      the check only looks at the prefix before `:`. Use
+      `Bash(pr-review update-sticky-comment:*)` if you want it shown.
     default: |
       Read
       Bash(find:*)
@@ -205,6 +214,9 @@ runs:
       env:
         CLI_DIR: ${{ github.action_path }}/cli
         PR_NUMBER: ${{ github.event.pull_request.number }}
+        ALLOWED_TOOLS: |
+          ${{ inputs.allowed-tools }}
+          ${{ inputs.additional-allowed-tools }}
       run: | # zizmor: ignore[github-env] not user input
         # Put pr-review (see cli/README.md) on PATH for Claude's Bash tool, and
         # expose PR_NUMBER as an ambient env var. GITHUB_TOKEN is set by Claude
@@ -216,6 +228,15 @@ runs:
 
         # Scratch space for Claude to stage --body-file content in.
         mkdir -p /tmp/pr-review-scratch
+
+        # Expose raw allowed-tools list so pr-review --help can filter its
+        # command listing to show only what's actually callable.
+        DELIM=$(openssl rand -hex 8)
+        {
+          echo "PR_REVIEW_ALLOWED_TOOLS<<EOF-${DELIM}"
+          echo "$ALLOWED_TOOLS"
+          echo "EOF-${DELIM}"
+        } >> "$GITHUB_ENV"
 
     - name: diff cache
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5

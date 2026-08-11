@@ -722,19 +722,92 @@ async function trySubmit(claimedDir, submitOpts) {
   return true;
 }
 
+/** Convert a glob pattern (supporting only '*') to a RegExp anchored at start. */
+function globToRegex(pattern) {
+  return new RegExp(
+    "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*"),
+  );
+}
+
+/**
+ * Check whether calling `pr-review <name>` would be allowed by the raw
+ * allowed-tools list (newline-separated, comment lines allowed).
+ *
+ * Handles:
+ *   Bash             → all bash allowed
+ *   Bash(prefix:*)   → bash commands whose line starts with `prefix` (glob ok)
+ *   Bash(prefix)     → same without the ':*' trailer
+ *
+ * Limitation: argument-constrained patterns like
+ * `Bash(pr-review update-sticky-comment --body-file *)` won't be recognized
+ * as enabling `update-sticky-comment` — the check only looks at the command
+ * prefix (before ':'). See the `allowed-tools` input description.
+ */
+function isSubcommandEnabled(name, rawAllowedTools) {
+  const entries = rawAllowedTools
+    .split("\n")
+    .map((line) => line.replace(/#.*$/, "").trim())
+    .filter(Boolean);
+
+  const cmdToCheck = `pr-review ${name}`;
+
+  for (const entry of entries) {
+    if (entry === "Bash") return true;
+
+    const match = /^Bash\((.+)\)$/.exec(entry);
+    if (!match) continue;
+
+    const pattern = match[1];
+    const colonIdx = pattern.indexOf(":");
+    const cmdPrefix = colonIdx >= 0 ? pattern.slice(0, colonIdx) : pattern;
+    if (globToRegex(cmdPrefix).test(cmdToCheck)) return true;
+  }
+
+  return false;
+}
+
 function formatTopLevelHelp() {
-  const names = COMMANDS.names();
-  const width = Math.max(...names.map((name) => name.length));
-  return [
-    "Usage: pr-review <command> [options]",
-    "",
-    "Commands:",
-    ...names.map(
-      (name) => `  ${name.padEnd(width)}  ${COMMANDS.get(name).description}`,
-    ),
+  const allNames = COMMANDS.names();
+
+  let enabledNames, disabledNames;
+  const rawAllowedTools = process.env.PR_REVIEW_ALLOWED_TOOLS;
+  if (rawAllowedTools) {
+    const hasEntries = rawAllowedTools
+      .split("\n")
+      .some((line) => line.replace(/#.*$/, "").trim());
+    if (hasEntries) {
+      enabledNames = allNames.filter((n) =>
+        isSubcommandEnabled(n, rawAllowedTools),
+      );
+      disabledNames = allNames.filter(
+        (n) => !isSubcommandEnabled(n, rawAllowedTools),
+      );
+    }
+  }
+  enabledNames ??= allNames;
+  disabledNames ??= [];
+
+  const lines = ["Usage: pr-review <command> [options]", "", "Commands:"];
+
+  if (enabledNames.length > 0) {
+    const width = Math.max(...enabledNames.map((name) => name.length));
+    lines.push(
+      ...enabledNames.map(
+        (name) => `  ${name.padEnd(width)}  ${COMMANDS.get(name).description}`,
+      ),
+    );
+  }
+
+  if (disabledNames.length > 0) {
+    lines.push("", `Not enabled for this run: ${disabledNames.join(", ")}`);
+  }
+
+  lines.push(
     "",
     "Run 'pr-review <command> --help' for details on a specific command.",
-  ].join("\n");
+  );
+
+  return lines.join("\n");
 }
 
 async function main() {
