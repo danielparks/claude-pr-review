@@ -94,6 +94,12 @@ It’s also **not** covered by GitHub’s “Allow GitHub Actions to create and 
 
 `APPROVE` specifically has multiple layers of automatic downgrade-to-`COMMENT` built in — see “Why a queue directory” above — because an unearned approval is unsafe (it can vouch for a review that never finished), whereas an unearned block is just recoverable friction. `REQUEST_CHANGES` is deliberately never downgraded for that reason: by default, GitHub blocks the merge button for any pending “Request changes” review from a write-access account, and softening that into a mere comment on a failed or lower-trust run would be trading a fail-safe default for a fail-open one.
 
+### `post-comment --body-file PATH`
+
+Posts a new top-level (issue) comment immediately. Unlike `update-sticky-comment`, this always creates a fresh comment — it never finds and updates an existing one. Enable it by adding `Bash(pr-review post-comment:*)` to `additional-allowed-tools`.
+
+**Danger:** there's no deduplication and no batching — each call immediately posts a visible comment. A runaway prompt or repeated review trigger could spam the PR with multiple top-level comments. Use this for one-off commentary that doesn't fit in the grouped review; for a running status summary that Claude updates across reviews, prefer `update-sticky-comment` instead.
+
 ### `update-sticky-comment --body-file PATH`
 
 Creates or updates a single top-level PR comment that Claude can keep current across a PR's lifetime, e.g. an overall status summary. The comment is identified by a hidden marker embedded in its body (`<!-- pr-review: sticky comment -->`) plus authorship by the authenticated user.

@@ -86,6 +86,8 @@ inputs:
       Bash(pr-review queue-inline-comment:*)
       Bash(pr-review reply-inline-comment:*)
       Bash(pr-review comment-review:*)
+      Bash(pr-review add-label:*)
+      Bash(pr-review remove-label:*)
       Bash(pr-review list-queue:*)
       Bash(pr-review discard-queue:*)
 
@@ -109,6 +111,23 @@ inputs:
       particular, see the “Opt-in tools” section of `cli/README.md` for
       `pr-review` subcommands that are deliberately excluded from the default
       `allowed-tools` list.
+    default:
+  available-labels:
+    description: >
+      Newline-separated list of label name patterns (shell globs) to surface to
+      Claude. When set, labels whose names match any pattern are fetched from
+      the repo and injected into Claude's prompt with their descriptions, so
+      Claude knows which labels to reach for and what they mean.
+
+      Example: `Claude: *` matches all labels whose names start with `Claude: `.
+
+      When unset (the default), no label context is added. Claude can still add
+      or remove labels via `pr-review add-label`/`remove-label` — it just won't
+      have repo-specific guidance in the prompt about which labels to use.
+
+      Requires `Bash(pr-review add-label:*)` and/or
+      `Bash(pr-review remove-label:*)` in `allowed-tools` to be useful (both
+      are in the default list).
     default:
   gh-pr-render-version:
     description: Version of the `gh-pr-render` tool to use.
@@ -311,6 +330,72 @@ runs:
           echo "EOF-${DELIM}"
         } >> "$GITHUB_OUTPUT"
 
+    - name: Fetch available labels
+      id: labels
+      if: steps.diff.outputs.skip != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        AVAILABLE_LABELS: ${{ inputs.available-labels }}
+      run: |
+        # Fetch and filter repo labels for Claude's prompt context
+        set -euo pipefail
+
+        if [[ -z "$AVAILABLE_LABELS" ]]; then
+          exit 0
+        fi
+
+        # Fetch all repo labels (paginated)
+        LABELS_JSON=$(gh api "repos/$REPO/labels" --paginate)
+        LABEL_NAMES=$(echo "$LABELS_JSON" | jq -r '.[].name')
+
+        if [[ -z "$LABEL_NAMES" ]]; then
+          echo "::warning::No labels found in repo; available-labels patterns will not match anything."
+          exit 0
+        fi
+
+        # For each label, check if it matches any pattern (shell glob)
+        MATCHED=""
+        while IFS= read -r name; do
+          [[ -z "$name" ]] && continue
+          while IFS= read -r pattern; do
+            # Strip leading/trailing whitespace and skip empty/comment lines
+            pattern="${pattern#"${pattern%%[![:space:]]*}"}"
+            pattern="${pattern%"${pattern##*[![:space:]]}"}"
+            [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+            # Unquoted $pattern enables shell glob matching in [[ == ]]
+            # shellcheck disable=SC2254
+            if [[ "$name" == $pattern ]]; then
+              desc=$(echo "$LABELS_JSON" | jq -r --arg n "$name" \
+                '.[] | select(.name == $n) | .description // ""')
+              if [[ -n "$desc" ]]; then
+                MATCHED+="- ${name}: ${desc}"$'\n'
+              else
+                MATCHED+="- ${name}"$'\n'
+              fi
+              break
+            fi
+          done <<< "$AVAILABLE_LABELS"
+        done <<< "$LABEL_NAMES"
+
+        if [[ -z "$MATCHED" ]]; then
+          echo "::warning::No labels matched the available-labels patterns. Check your patterns against 'gh label list'."
+          exit 0
+        fi
+
+        DELIM=$(openssl rand -hex 8)
+        {
+          echo "label_context<<EOF-${DELIM}"
+          echo "The following labels are available for this PR."
+          echo "Use \`pr-review add-label --label LABEL\` to add one and"
+          echo "\`pr-review remove-label --label LABEL\` to remove one."
+          echo "Only use labels from this list."
+          echo ""
+          printf '%s' "$MATCHED"
+          echo "EOF-${DELIM}"
+        } >> "$GITHUB_OUTPUT"
+
     - uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e # v1.0.123
       id: claude
       if: steps.diff.outputs.skip != 'true'
@@ -323,6 +408,8 @@ runs:
 
           ${{ inputs.prompt }}
           ${{ inputs.additional-prompt }}
+
+          ${{ steps.labels.outputs.label_context }}
 
           ${{ steps.diff.outputs.diff_section }}
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  addLabels,
   apiErrorHint,
   createIssueComment,
   createReply,
@@ -11,6 +12,7 @@ import {
   isApprovalRejected,
   listIssueComments,
   minimizeReview,
+  removeLabel,
   resolveReviewThread,
   updateIssueComment,
 } from "../lib/github.js";
@@ -285,6 +287,55 @@ describe("github", () => {
         });
         const [issueRequest] = filterByUrlEnd(requests, "/issues/comments/333");
         expect(issueRequest.body).toEqual({ body: "updated content" });
+      },
+    );
+  });
+
+  it("addLabels() posts label names and succeeds on 200", async () => {
+    await withMockGitHub(
+      responses.POST_issue_labels(5, ["bug", "enhancement"]),
+
+      async ({ requests }) => {
+        await addLabels(...TOKEN_ORG_REPO, 5, ["bug", "enhancement"]);
+        const [req] = filterByUrlEnd(requests, "/issues/5/labels");
+        expect(req.body).toEqual({ labels: ["bug", "enhancement"] });
+      },
+    );
+  });
+
+  it("addLabels() throws a 422 when a label doesn't exist in the repo", async () => {
+    await withMockGitHub(
+      responses.POST_issue_labels_error(5, 422, "Validation Failed"),
+
+      async () => {
+        await expect(
+          addLabels(...TOKEN_ORG_REPO, 5, ["nonexistent"]),
+        ).rejects.toSatisfy((error) => error.status === 422);
+      },
+    );
+  });
+
+  it("removeLabel() sends DELETE to the label endpoint", async () => {
+    await withMockGitHub(
+      responses.DELETE_issue_label(5, "bug"),
+
+      async ({ requests }) => {
+        await removeLabel(...TOKEN_ORG_REPO, 5, "bug");
+        expect(requests).toHaveLength(1);
+        expect(requests[0].method).toBe("DELETE");
+        expect(requests[0].url).toMatch(/\/issues\/5\/labels\/bug$/);
+      },
+    );
+  });
+
+  it("removeLabel() silently succeeds on 404", async () => {
+    await withMockGitHub(
+      responses.DELETE_issue_label_404(5, "nonexistent"),
+
+      async () => {
+        await expect(
+          removeLabel(...TOKEN_ORG_REPO, 5, "nonexistent"),
+        ).resolves.toBeUndefined();
       },
     );
   });

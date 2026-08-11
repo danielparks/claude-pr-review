@@ -137,4 +137,19 @@ export const responses = {
         html_url: `https://example/issues/comments/${comment_id}`,
       },
     }),
+  POST_issue_labels: (pr, returnedLabels) =>
+    route("POST", `/issues/${pr}/labels$`, {
+      body: returnedLabels.map((name) => ({ name, color: "blue" })),
+    }),
+  POST_issue_labels_error: (pr, status, message) =>
+    route("POST", `/issues/${pr}/labels$`, { status, body: { message } }),
+  DELETE_issue_label: (pr, label) =>
+    route("DELETE", `/issues/${pr}/labels/${encodeURIComponent(label)}$`, {
+      body: [],
+    }),
+  DELETE_issue_label_404: (pr, label) =>
+    route("DELETE", `/issues/${pr}/labels/${encodeURIComponent(label)}$`, {
+      status: 404,
+      body: { message: "Label does not exist" },
+    }),
 };

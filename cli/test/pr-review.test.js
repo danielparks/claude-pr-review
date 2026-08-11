@@ -967,4 +967,85 @@ describe("pr-review CLI", () => {
       /Unknown command: not-a-real-command.*discard-queue/s,
     );
   });
+
+  it("add-label adds a label to the PR", async () => {
+    await withMockGitHub(
+      responses.POST_issue_labels(5, ["bug"]),
+
+      async ({ requests }) => {
+        const { stdout } = await run(["add-label", "--label", "bug"]);
+        expect(stdout).toMatch(/Added label: bug/);
+        const [req] = filterByUrlEnd(requests, "/issues/5/labels");
+        expect(req.body).toEqual({ labels: ["bug"] });
+      },
+    );
+  });
+
+  it("add-label fails with a helpful message when the label doesn't exist", async () => {
+    await withMockGitHub(
+      responses.POST_issue_labels_error(5, 422, "Validation Failed"),
+
+      async () => {
+        await expect(
+          run(["add-label", "--label", "nonexistent"]),
+        ).rejects.toThrow(/may not exist in this repo/);
+      },
+    );
+  });
+
+  it("add-label requires --label", async () => {
+    await expect(run(["add-label"])).rejects.toThrow(/--label is required/);
+  });
+
+  it("remove-label removes a label from the PR", async () => {
+    await withMockGitHub(
+      responses.DELETE_issue_label(5, "bug"),
+
+      async ({ requests }) => {
+        const { stdout } = await run(["remove-label", "--label", "bug"]);
+        expect(stdout).toMatch(/Removed label: bug/);
+        expect(requests[0].method).toBe("DELETE");
+        expect(requests[0].url).toMatch(/\/issues\/5\/labels\/bug$/);
+      },
+    );
+  });
+
+  it("remove-label silently succeeds when the label isn't applied", async () => {
+    await withMockGitHub(
+      responses.DELETE_issue_label_404(5, "nonexistent"),
+
+      async () => {
+        const { stdout } = await run([
+          "remove-label",
+          "--label",
+          "nonexistent",
+        ]);
+        expect(stdout).toMatch(/Removed label: nonexistent/);
+      },
+    );
+  });
+
+  it("remove-label requires --label", async () => {
+    await expect(run(["remove-label"])).rejects.toThrow(/--label is required/);
+  });
+
+  it("post-comment posts a top-level comment immediately", async () => {
+    await withMockGitHub(
+      responses.POST_issue_comment(5, 777),
+
+      async ({ requests }) => {
+        const body = await bodyFile("This is a standalone comment.");
+        const { stdout } = await run(["post-comment", "--body-file", body]);
+        expect(stdout).toMatch(/Posted comment:/);
+        const [req] = filterByUrlEnd(requests, "/issues/5/comments");
+        expect(req.body).toEqual({ body: "This is a standalone comment." });
+      },
+    );
+  });
+
+  it("post-comment requires --body-file", async () => {
+    await expect(run(["post-comment"])).rejects.toThrow(
+      /--body-file is required/,
+    );
+  });
 });

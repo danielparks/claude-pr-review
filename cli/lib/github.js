@@ -297,3 +297,34 @@ export async function withApiError(func) {
     fail(`${error.message}${apiErrorHint(error)}`);
   }
 }
+
+/** Adds labels to an issue/PR. All labels must already exist in the repo. */
+export async function addLabels(token, owner, repo, issueNumber, labels) {
+  await request(
+    token,
+    "POST",
+    `/repos/${owner}/${repo}/issues/${issueNumber}/labels`,
+    { labels },
+  );
+}
+
+/**
+ * Removes a label from an issue/PR.
+ *
+ * Silently succeeds if the label isn’t applied or doesn’t exist in the repo
+ * (both return 404 from GitHub).
+ */
+export async function removeLabel(token, owner, repo, issueNumber, label) {
+  try {
+    await request(
+      token,
+      "DELETE",
+      `/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
+    );
+  } catch (error) {
+    if (error instanceof GitHubApiError && error.status === 404) {
+      return;
+    }
+    throw error;
+  }
+}
