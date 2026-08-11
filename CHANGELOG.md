@@ -32,6 +32,7 @@ All notable changes to this project will be documented in this file.
   - `request-changes-review`: submit a review requesting changes.
   - `approve-review`: submit a review approving the changes. If there is a problem with the Claude run, or if we don’t get the `claude[bot]` token, then the review will be downgraded to a comment with a note.
 - Removed `bot-username` input (no longer needed).
+- Added a `--permission-prompt-tool` MCP server (`cli/pr-review-permission-prompt`) so a tool call that falls outside `allowed-tools` gets a clear denial message instead of Claude Code's generic one.
 
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
 [anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action

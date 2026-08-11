@@ -1,0 +1,111 @@
+#!/usr/bin/env node
+
+// MCP server for Claude Code's `--permission-prompt-tool`. In `-p` (headless)
+// mode there is no terminal to prompt, so any tool call that isn't covered by
+// `--allowedTools` needs somewhere else to go; without a permission prompt
+// tool, Claude Code denies it with a generic built-in message. This server
+// has exactly one job: deny every call, naming the specific tool, so that
+// message is legible instead.
+//
+// This *is* an MCP server, unlike pr-review itself -- see "Why Bash instead
+// of MCP" in README.md. That reasoning doesn't apply here: this server never
+// needs the real GITHUB_TOKEN (or any secret), since it never calls GitHub.
+// It also has no state to manage and is called synchronously once per denied
+// tool, so hand-rolling the stdio JSON-RPC framing is simpler than adding
+// @modelcontextprotocol/sdk as a dependency for it.
+
+import { createInterface } from "node:readline";
+
+const SERVER_NAME = "pr-review-permission-prompt";
+const TOOL_NAME = "check";
+
+const TOOL_DEFINITION = {
+  name: TOOL_NAME,
+  description:
+    "Always denies. Used as Claude Code's --permission-prompt-tool so a " +
+    "tool call that falls through --allowedTools gets a clear denial " +
+    "message instead of the default one.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      tool_name: { type: "string" },
+      input: { type: "object" },
+      tool_use_id: { type: "string" },
+    },
+    required: ["tool_name", "input"],
+  },
+};
+
+function respond(id, result) {
+  process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\n");
+}
+
+function respondError(id, code, message) {
+  process.stdout.write(
+    JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } }) + "\n",
+  );
+}
+
+function handleMessage(message) {
+  const { id, method, params } = message;
+  const isRequest = id !== undefined && id !== null;
+
+  switch (method) {
+    case "initialize":
+      respond(id, {
+        protocolVersion: params?.protocolVersion ?? "2024-11-05",
+        capabilities: { tools: {} },
+        serverInfo: { name: SERVER_NAME, version: "0.1.0" },
+      });
+      return;
+
+    case "notifications/initialized":
+      return; // Notification: no response.
+
+    case "tools/list":
+      respond(id, { tools: [TOOL_DEFINITION] });
+      return;
+
+    case "tools/call": {
+      if (params?.name !== TOOL_NAME) {
+        respondError(id, -32602, `Unknown tool: ${params?.name}`);
+        return;
+      }
+
+      const toolName = params?.arguments?.tool_name ?? "This tool";
+      respond(id, {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              behavior: "deny",
+              message: `${toolName} is not in the allowed-tools list.`,
+            }),
+          },
+        ],
+      });
+      return;
+    }
+
+    default:
+      if (isRequest) {
+        respondError(id, -32601, `Method not found: ${method}`);
+      }
+      return;
+  }
+}
+
+const rl = createInterface({ input: process.stdin });
+rl.on("line", (line) => {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+
+  let message;
+  try {
+    message = JSON.parse(trimmed);
+  } catch {
+    return; // Not a valid JSON-RPC message; ignore rather than crash.
+  }
+
+  handleMessage(message);
+});

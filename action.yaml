@@ -277,7 +277,10 @@ runs:
           ${{ steps.diff.outputs.diff_section }}
 
           ${{ steps.render.outputs.pr_context }}
-        claude_args: --allowedTools "${{ steps.tools.outputs.list }}"
+        claude_args: |
+          --allowedTools "${{ steps.tools.outputs.list }}"
+          --mcp-config '{"mcpServers":{"pr-review-permission-prompt":{"command":"node","args":["${{ github.action_path }}/cli/pr-review-permission-prompt"]}}}'
+          --permission-prompt-tool mcp__pr-review-permission-prompt__check
 
     - name: Submit any review comments Claude queued but didn't post
       # Runs even if the step above failed or Claude never called

@@ -8,6 +8,12 @@ The Claude App token (what makes comments post as `claude[bot]` instead of `gith
 
 This isn’t reaching around anything Anthropic didn’t already intend: it’s the same default trust model their own action already applies to Bash-tool subprocesses for any actor with write access (no env scrubbing unless `allowed_non_write_users` is set) — confirmed empirically on an older version of this action, where `gh pr comment`/`gh api` from Bash already posted as `claude[bot]` (see danielparks/gh-pr-render#32).
 
+## `pr-review-permission-prompt`
+
+`action.yaml` also passes Claude Code `--permission-prompt-tool mcp__pr-review-permission-prompt__check`, backed by `cli/pr-review-permission-prompt`. In `-p` (headless) mode there's no terminal to prompt, so a tool call that isn't covered by `--allowedTools` has nowhere to go; without a permission prompt tool, Claude Code denies it with a generic built-in message. This server's only job is to deny every call it's asked about, naming the specific tool, so that message is legible instead: `<tool> is not in the allowed-tools list.`
+
+This one *is* an MCP server, unlike `pr-review` itself — see “Why Bash instead of MCP” above. That reasoning doesn't apply here: it never touches `GITHUB_TOKEN` or any other secret, since it never calls GitHub. It also has no state to manage and is invoked synchronously once per denied call, so hand-rolling the MCP stdio JSON-RPC framing (see the script itself) is simpler than adding `@modelcontextprotocol/sdk` as a dependency for it.
+
 ## Why no build step
 
 This has zero runtime dependencies — it’s plain JavaScript using the built-in `fetch`, so `action.yaml` runs `cli/pr-review` directly with no bundling and no install step at consumption time. `npm ci`/`eslint`/`vitest` are dev-only, for local development and `scripts/cli-check` (wired into pre-commit).
