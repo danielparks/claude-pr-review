@@ -11,9 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bugfixes
 
-- Updated response workflow example to use snake_case instead of kebab-case for [anthropics/claude-code-action] inputs.
 - Removed “resolve” from prompt default; Claude cannot actually resolve comments with the GitHub REST API.
 - Properly shell-quoted `allowed-tools` entries (and the new MCP config below) before passing them to [anthropics/claude-code-action]’s `claude_args`. A `"`, `` ` ``, or `$` in an allowed-tools entry could have broken out of the double quoting and injected extra CLI arguments.
+- Updated response workflow example to use snake_case instead of kebab-case for [anthropics/claude-code-action] inputs.
+- Updated response workflow example to set the commit author to `claude[bot]` instead of `github-actions[bot]`.
 
 ### Changes
 
