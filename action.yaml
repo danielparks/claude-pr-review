@@ -328,7 +328,7 @@ runs:
         # No Python project, so no files to hash into uv cache key.
         cache-dependency-glob: ""
 
-    - name: Run conversation extractor
+    - name: Extract redacted Claude conversation
       id: conversation-extract
       if: always() && steps.retention.outputs.days != ''
       shell: bash
@@ -338,31 +338,23 @@ runs:
         SCRIPTS: ${{ github.action_path }}/scripts
         WORKSPACE: ${{ github.workspace }}
       run: |
-        # Extract this run's Claude Code session logs to HTML, redact
-        # secrets, and report the result as a single file or a directory
-        # to archive.
+        # Extract redacted Claude conversation
         set -euo pipefail
         shopt -s nullglob
 
         mkdir -p "$OUTPUT"
 
-        # --depth hook: maximum detail, including tool errors (e.g.
-        # permission denials) that claude-conversation-extractor drops
-        # entirely. --combined only + a page-size well above what a single
-        # run could produce keeps this to exactly one file, since
-        # claude-code-log ignores --output for individual session files and
-        # for paginated combined output (writing those next to the source
-        # JSONL instead), so getting a single deterministic file at $OUTPUT
-        # depends on suppressing both. --no-cache skips writing its sqlite
-        # cache, which we don't want on an ephemeral runner anyway.
+        # `--detail full`: maximum detail, including tool errors (e.g.
+        #   permission denials).
+        # `--no-cache` skips writing its sqlite cache, which we don't want on an
+        #   ephemeral runner anyway.
         #
-        # $WORKSPACE (not $OUTPUT) is the input: claude-code-log maps a
-        # project working directory to its ~/.claude/projects/<encoded> log
-        # directory itself.
+        # $WORKSPACE is the input: `claude-code-log` maps a project working
+        # directory to its `~/.claude/projects/<encoded>` log directory itself.
         uvx --from claude-code-log==1.5.0 claude-code-log \
-          --format html --depth hook --combined only --page-size 1000000 \
-          --no-cache --output "$OUTPUT/conversation.html" "$WORKSPACE" \
-          || echo "::warning::claude-code-log found no session logs to extract"
+          --format html --detail full --no-cache \
+          --output "$OUTPUT/conversation.html" "$WORKSPACE" \
+          || echo "::warning::claude-code-log failed"
 
         files=("$OUTPUT"/*)
         "${SCRIPTS}/redact" "${files[@]}"
