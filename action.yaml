@@ -150,6 +150,63 @@ runs:
             | sed 's/,$//' \
           )" >> "$GITHUB_OUTPUT"
 
+    - name: Build claude_args
+      id: claude-args
+      shell: bash
+      env:
+        ALLOWED_TOOLS_LIST: ${{ steps.tools.outputs.list }}
+        PERMISSION_PROMPT_SCRIPT: ${{ github.action_path }}/cli/pr-review-permission-prompt
+      run: |
+        # Build claude_args
+        #
+        # claude-code-action parses claude_args by running it through
+        # shell-quote (see parseClaudeArgsToExtraArgs in its
+        # base-action/src/parse-sdk-options.ts), so any value we interpolate
+        # -- an allowed-tools entry, or github.action_path below -- has to be
+        # shell-quoted, not just wrapped in a fixed pair of double quotes: a
+        # value containing a `"`, `$`, or `` ` `` would otherwise be
+        # interpreted rather than taken literally, and could in principle
+        # inject additional arguments. `shQuote` below applies the standard
+        # POSIX single-quote escape (replacing each `'` with `'\''`), which
+        # is exactly what that parser expects.
+        #
+        # shQuote doesn't strip newlines, and today's inputs can't contain
+        # one (allowed-tools entries go through `tr '\n' ','` upstream), but
+        # `key=value` is a single-line format: a stray newline in the value
+        # would corrupt $GITHUB_OUTPUT and fail the step. Using the
+        # heredoc-with-random-delimiter form (same as the diff_section output
+        # below) instead of `value=...` avoids relying on that upstream
+        # guarantee still holding here.
+        set -euo pipefail
+
+        VALUE=$(node -e '
+          function shQuote(value) {
+            return "\x27" + String(value).replace(/\x27/g, "\x27\\\x27\x27") + "\x27";
+          }
+
+          const mcpConfig = JSON.stringify({
+            mcpServers: {
+              "pr-review-permission-prompt": {
+                command: "node",
+                args: [process.env.PERMISSION_PROMPT_SCRIPT],
+              },
+            },
+          });
+
+          console.log([
+            "--allowedTools", shQuote(process.env.ALLOWED_TOOLS_LIST),
+            "--mcp-config", shQuote(mcpConfig),
+            "--permission-prompt-tool", shQuote("mcp__pr-review-permission-prompt__check"),
+          ].join(" "));
+        ')
+
+        DELIM=$(openssl rand -hex 8)
+        {
+          echo "value<<EOF-${DELIM}"
+          echo "$VALUE"
+          echo "EOF-${DELIM}"
+        } >> "$GITHUB_OUTPUT"
+
     - name: Configure pr-review CLI
       shell: bash
       env:
@@ -277,10 +334,7 @@ runs:
           ${{ steps.diff.outputs.diff_section }}
 
           ${{ steps.render.outputs.pr_context }}
-        claude_args: |
-          --allowedTools "${{ steps.tools.outputs.list }}"
-          --mcp-config '{"mcpServers":{"pr-review-permission-prompt":{"command":"node","args":["${{ github.action_path }}/cli/pr-review-permission-prompt"]}}}'
-          --permission-prompt-tool mcp__pr-review-permission-prompt__check
+        claude_args: ${{ steps.claude-args.outputs.value }}
 
     - name: Submit any review comments Claude queued but didn't post
       # Runs even if the step above failed or Claude never called
