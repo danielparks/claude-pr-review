@@ -65,4 +65,9 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Work around claude-code-action defaulting bot_id to
+          # github-actions[bot]'s ID (41898282) instead of claude[bot]'s
+          # (209825114), which misattributes commit authorship on GitHub.
+          # https://github.com/anthropics/claude-code-action/issues/759
+          bot_id: "209825114"
           claude_args: '--allowedTools "Read,Write,Edit,Bash,WebSearch,WebFetch"'
