@@ -247,7 +247,7 @@ describe("pr-review CLI", () => {
         const [issueRequest] = filterByUrlEnd(requests, "/issues/5/comments");
         expect(issueRequest.body.body).toMatch(/current status/);
         expect(issueRequest.body.body).toMatch(
-          /<!-- pr-review:sticky-comment -->/,
+          /<!-- pr-review: sticky comment -->/,
         );
       },
     );
@@ -261,7 +261,7 @@ describe("pr-review CLI", () => {
         {
           id: 2,
           user: { login: "claude[bot]" },
-          body: "<!-- pr-review:sticky-comment -->\nold status",
+          body: "<!-- pr-review: sticky comment -->\n\nold status",
         },
       ]),
       responses.PATCH_issue_comment(2),
@@ -287,7 +287,7 @@ describe("pr-review CLI", () => {
         {
           id: 3,
           user: { login: "someone-else" },
-          body: "<!-- pr-review:sticky-comment -->\nspoofed",
+          body: "<!-- pr-review: sticky comment -->\n\nspoofed",
         },
       ]),
       responses.POST_issue_comment(5, 556),
@@ -775,82 +775,6 @@ describe("pr-review CLI", () => {
         expect(reviewRequest.body.event).toBe("COMMENT");
         expect(reviewRequest.body.body).toContain("ship it");
         expect(reviewRequest.body.body).toContain("didn't complete cleanly");
-      },
-    );
-  });
-
-  it("sweep --sticky-template-file creates the sticky comment when none exists yet", async () => {
-    await withMockGitHub(
-      viewerRoute("claude[bot]"),
-      responses.GET_issue_comments(5, []),
-      responses.POST_issue_comment(5, 777),
-
-      async ({ requests }) => {
-        const { stdout } = await run([
-          "sweep",
-          "--sticky-template-file",
-          await bodyFile("Review in progress..."),
-        ]);
-        expect(stdout).toMatch(/Created sticky comment from template/);
-
-        const [issueRequest] = filterByUrlEnd(requests, "/issues/5/comments");
-        expect(issueRequest.body.body).toMatch(/Review in progress/);
-        expect(issueRequest.body.body).toMatch(
-          /<!-- pr-review:sticky-comment -->/,
-        );
-      },
-    );
-  });
-
-  it("sweep --sticky-template-file leaves an existing sticky comment alone", async () => {
-    await withMockGitHub(
-      viewerRoute("claude[bot]"),
-      responses.GET_issue_comments(5, [
-        {
-          id: 4,
-          user: { login: "claude[bot]" },
-          body: "<!-- pr-review:sticky-comment -->\nreal findings",
-        },
-      ]),
-
-      async ({ requests }) => {
-        const { stdout } = await run([
-          "sweep",
-          "--sticky-template-file",
-          await bodyFile("Review in progress..."),
-        ]);
-        expect(stdout).toMatch(/Nothing to sweep/);
-        expect(
-          requests.some(
-            (r) => r.url.includes("/issues/") && r.method !== "GET",
-          ),
-        ).toBe(false);
-      },
-    );
-  });
-
-  it("sweep without --sticky-template-file never touches issue comments", async () => {
-    await withMockGitHub(async ({ requests }) => {
-      const { stdout } = await run(["sweep"]);
-      expect(stdout).toMatch(/Nothing to sweep/);
-      expect(requests).toHaveLength(0);
-    });
-  });
-
-  it("sweep warns but doesn't fail the job if ensuring the sticky comment fails", async () => {
-    await withMockGitHub(
-      viewerRoute("claude[bot]"),
-      responses.GET_issue_comments(5, []),
-
-      async ({ requests }) => {
-        const { stdout, stderr } = await run([
-          "sweep",
-          "--sticky-template-file",
-          "/nonexistent/template.txt",
-        ]);
-        expect(stdout).toMatch(/Nothing to sweep/);
-        expect(stderr).toMatch(/::warning::Could not ensure sticky comment/);
-        expect(filterByUrlEnd(requests, "/issues/5/comments")).toHaveLength(0);
       },
     );
   });

@@ -201,36 +201,18 @@ COMMANDS.add(
   },
 );
 
-const STICKY_MARKER = "<!-- pr-review:sticky-comment -->";
+const STICKY_MARKER = "<!-- pr-review: sticky comment -->\n\n";
 
 /**
- * Find the sticky comment, if any, among an issue's comments.
+ * Create or update a single sticky top-level comment.
  *
- * Matches on the hidden marker plus authorship by the given login, never on
- * position (e.g. "first comment") -- position shifts if anything else gets
- * commented first, while the marker survives reruns and crashes predictably.
- * The authorship check means this can never resolve to a comment some other
- * user or bot happened to write with the marker text in it.
- */
-function findStickyComment(comments, viewerLogin) {
-  return comments.find(
-    (comment) =>
-      comment.user?.login === viewerLogin &&
-      comment.body?.includes(STICKY_MARKER),
-  );
-}
-
-/**
- * Create or update a single "sticky" top-level comment (e.g. an overall
- * status summary) that stays current across a PR's lifetime instead of
- * leaving a new comment every time.
- *
- * This only ever reads or writes the one comment `findStickyComment`
- * resolves to; it can't be used to edit any other past comment.
+ * This only ever writes a single comment authored by the authenticated user and
+ * containing a special marker. It can’t be used to edit any other comment.
  */
 COMMANDS.add(
   "update-sticky-comment",
-  "Create or update a single sticky top-level comment.",
+  "Create or update a single sticky top-level comment. This is not enabled " +
+    "as an allowed-tool by default.",
   {
     body: { long: "body-file", map: readBodyFile, required: true },
   },
@@ -238,7 +220,7 @@ COMMANDS.add(
     const token = requireToken();
     const { owner, repo } = repoFromEnv();
     const pr = prNumberFromEnv();
-    const fullBody = `${STICKY_MARKER}\n${body}`;
+    const fullBody = `${STICKY_MARKER}${body}`;
 
     const [viewerLogin, comments] = await withApiError(() =>
       Promise.all([
@@ -246,7 +228,11 @@ COMMANDS.add(
         listIssueComments(token, owner, repo, pr),
       ]),
     );
-    const existing = findStickyComment(comments, viewerLogin);
+    const existing = comments.find(
+      (comment) =>
+        comment.user?.login === viewerLogin &&
+        comment.body?.includes(STICKY_MARKER),
+    );
 
     if (existing) {
       const result = await withApiError(() =>
@@ -649,47 +635,6 @@ COMMANDS.add(
 );
 
 /**
- * Create the sticky comment from a template if it doesn't already exist.
- *
- * Meant as a fallback for a run that never got as far as Claude calling
- * `update-sticky-comment` itself (most commonly the very first run on a PR,
- * if Claude's step fails before it gets there) -- so something reasonable
- * exists instead of nothing. Never overwrites an existing sticky comment,
- * since by the time `sweep` runs Claude may already have written real
- * content into it.
- *
- * Uses whatever token `sweep` itself was given, same as everything else it
- * does. If that's the plain `github.token` fallback rather than the Claude
- * App token (e.g. because Claude's step failed outright), the placeholder
- * this creates is authored by a different login than `update-sticky-comment`
- * will use on a later successful run -- `findStickyComment`'s authorship
- * check won't recognize it as "the" sticky comment, so that run creates a
- * second, correctly-attributed one and leaves this placeholder orphaned.
- * Same class of known, accepted gap as the duplicate-review race described
- * in `cli/README.md`.
- */
-async function ensureStickyComment(token, templatePath) {
-  const { owner, repo } = repoFromEnv();
-  const pr = prNumberFromEnv();
-
-  const [viewerLogin, comments] = await Promise.all([
-    getViewerLogin(token),
-    listIssueComments(token, owner, repo, pr),
-  ]);
-  if (findStickyComment(comments, viewerLogin)) return;
-
-  const template = redact(await readFile(templatePath, "utf8"));
-  const result = await createIssueComment(
-    token,
-    owner,
-    repo,
-    pr,
-    `${STICKY_MARKER}\n${template}`,
-  );
-  console.log(`Created sticky comment from template: ${result.html_url}`);
-}
-
-/**
  * Invoked by the deferred fallback step after Claude's run ends, not by
  * Claude itself. Idempotent no matter how many times it runs or what state
  * it finds: posts anything Claude queued but never submitted, retries any
@@ -701,11 +646,6 @@ async function ensureStickyComment(token, templatePath) {
  * succeed, or when it's using the plain `github.token` fallback instead of
  * the Claude App token, since neither circumstance should get to submit an
  * approval sweep never actually watched happen live.
- *
- * `--sticky-template-file` is only passed when `action.yaml`'s
- * `sticky-comment-template` input is set; see `ensureStickyComment`. Its
- * failure doesn't fail the job -- the sticky comment is a nice-to-have
- * summary, not the review submission itself.
  */
 COMMANDS.add(
   "sweep",
@@ -720,14 +660,8 @@ COMMANDS.add(
         "Force any queued APPROVE to submit as COMMENT instead (with an " +
         "explanatory note appended).",
     },
-    stickyTemplatePath: {
-      long: "sticky-template-file",
-      description:
-        "Ensure a sticky comment exists. If it doesn't, creates it from the " +
-        "contents of this template file.",
-    },
   },
-  async ({ forceDowngradeApproval, stickyTemplatePath }) => {
+  async ({ forceDowngradeApproval }) => {
     const root = queueRoot();
     let handled = 0;
     let failed = 0;
@@ -753,17 +687,6 @@ COMMANDS.add(
       console.log(
         `Swept ${handled} pending submission(s), ${failed} failure(s).`,
       );
-    }
-
-    if (stickyTemplatePath) {
-      try {
-        await ensureStickyComment(requireToken(), stickyTemplatePath);
-      } catch (error) {
-        console.error(
-          `::warning::Could not ensure sticky comment exists: ` +
-            `${error.message}${apiErrorHint(error)}`,
-        );
-      }
     }
 
     if (failed > 0) {

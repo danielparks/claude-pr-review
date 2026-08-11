@@ -110,29 +110,6 @@ inputs:
       `pr-review` subcommands that are deliberately excluded from the default
       `allowed-tools` list.
     default:
-  sticky-comment-template:
-    description: >
-      Template body for a single "sticky" top-level PR comment that Claude can
-      keep current across the PR's lifetime (e.g. an overall status summary)
-      instead of leaving a new comment on every review -- see
-      `update-sticky-comment` in the "Opt-in tools" section of
-      `cli/README.md`.
-
-      Empty (default) disables the feature entirely: `update-sticky-comment`
-      is not added to `allowed-tools`, and nothing creates the comment.
-
-      When set, this is used only as a fallback: if Claude's turn never
-      creates or updates the sticky comment itself (most commonly the very
-      first run on a PR, if Claude's step fails before it gets there), the
-      sweep step that always runs after Claude creates it from this template
-      instead of leaving nothing behind. Once Claude successfully calls
-      `update-sticky-comment`, its own content replaces this on every
-      subsequent run -- this template is never used to overwrite existing
-      content.
-
-      Pair this with `additional-prompt` describing when and how Claude
-      should call `update-sticky-comment`.
-    default:
   gh-pr-render-version:
     description: Version of the `gh-pr-render` tool to use.
     default: 0.5.0
@@ -162,7 +139,6 @@ runs:
         ALLOWED_TOOLS: |
           ${{ inputs.allowed-tools }}
           ${{ inputs.additional-allowed-tools }}
-          ${{ inputs.sticky-comment-template != '' && 'Bash(pr-review update-sticky-comment:*)' || '' }}
       run: |
         # Build allowed-tools list
         set -euo pipefail
@@ -229,7 +205,6 @@ runs:
       env:
         CLI_DIR: ${{ github.action_path }}/cli
         PR_NUMBER: ${{ github.event.pull_request.number }}
-        STICKY_TEMPLATE: ${{ inputs.sticky-comment-template }}
       run: | # zizmor: ignore[github-env] not user input
         # Put pr-review (see cli/README.md) on PATH for Claude's Bash tool, and
         # expose PR_NUMBER as an ambient env var. GITHUB_TOKEN is set by Claude
@@ -241,11 +216,6 @@ runs:
 
         # Scratch space for Claude to stage --body-file content in.
         mkdir -p /tmp/pr-review-scratch
-
-        if [[ -n "$STICKY_TEMPLATE" ]]; then
-          printf '%s\n' "$STICKY_TEMPLATE" \
-            > /tmp/pr-review-scratch/sticky-comment-template.md
-        fi
 
     - name: diff cache
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -381,16 +351,12 @@ runs:
             && 'true'
             || ''
           }}
-        STICKY_TEMPLATE: ${{ inputs.sticky-comment-template }}
       run: |
         # Submit any review comments Claude queued but didn't post
         set -euo pipefail
         FLAGS=()
         if [[ -n "$DOWNGRADE_APPROVAL" ]]; then
           FLAGS+=(--downgrade-approval)
-        fi
-        if [[ -n "$STICKY_TEMPLATE" ]]; then
-          FLAGS+=(--sticky-template-file /tmp/pr-review-scratch/sticky-comment-template.md)
         fi
         node "$CLI_SCRIPT" sweep "${FLAGS[@]}"
 

@@ -96,15 +96,11 @@ It’s also **not** covered by GitHub’s “Allow GitHub Actions to create and 
 
 ### `update-sticky-comment --body-file PATH`
 
-Creates or updates a single top-level PR comment that Claude can keep current across a PR's lifetime (e.g. an overall status summary), instead of leaving a new comment every time. The comment is identified by a hidden marker embedded in its body (`<!-- pr-review:sticky-comment -->`) plus authorship by the authenticated user — never by position (e.g. "first comment"), which shifts if anything else gets commented first, and never by an arbitrary comment id, which would let this edit any past comment instead of only its own sticky one.
+Creates or updates a single top-level PR comment that Claude can keep current across a PR's lifetime, e.g. an overall status summary. The comment is identified by a hidden marker embedded in its body (`<!-- pr-review: sticky comment -->`) plus authorship by the authenticated user.
 
-**Danger:** unlike every other default tool here, which only ever appends new content, this can silently overwrite a comment's previous text. That's a smaller behavior change than resolving threads or approving PRs — it never touches someone else's content or affects merge state — but a reviewer re-reading the PR later sees only the latest version, not what Claude said at each point in between. Opt in if you want a running summary; leave it out if every review should stand permanently on its own.
+**Danger:** unlike every other default tool here, which only ever appends new content, this can silently overwrite a comment’s previous text. A reviewer re-reading the PR later sees only the latest version, not what Claude said at each point in between. Opt in if you want a running summary; leave it out if every review should stand permanently on its own.
 
-Like `reply-inline-comment`, this posts immediately rather than going through the comment queue — there's nothing worth batching, and if it fails Claude sees the error directly and can retry within the same turn. It shares the same inherent gap as duplicate reviews (see "Why a queue directory" above): two concurrent invocations that both find no existing sticky comment yet will each create one, since there's no idempotency key to prevent it.
-
-`action.yaml`'s `sticky-comment-template` input is a convenience wrapper around this: setting it adds `update-sticky-comment` to `allowed-tools` automatically (no need to also list it in `additional-allowed-tools`), and makes the always-run `sweep` step create the comment from that template if Claude's own turn never got to it — see that input's description in the top-level [README.md]. `sweep` can't hand a comment it creates over to a later `update-sticky-comment` call under a _different_ authenticated identity: GitHub only lets an actor edit an issue comment it didn't author if it holds real repo-Admin permission, which the tokens involved here don't have. So this only works because `sweep` uses the same token Claude's own turn would have used (the Claude App token, when available) — see its doc comment in `pr-review` for the one edge case this creates when that token isn't available.
-
-[README.md]: ../README.md
+Like `reply-inline-comment`, this posts immediately rather than going through the comment queue — there’s nothing worth batching, and if it fails Claude sees the error directly and can retry within the same turn. It shares the same inherent gap as duplicate reviews (see “Why a queue directory” above): two concurrent invocations that both find no existing sticky comment yet will each create one, since there’s no idempotency key to prevent it.
 
 ## Development
 
