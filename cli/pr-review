@@ -32,6 +32,8 @@ import {
   setReview,
 } from "./lib/queue.js";
 import {
+  GitHubApiError,
+  addLabel,
   apiErrorHint,
   createIssueComment,
   createReply,
@@ -42,6 +44,7 @@ import {
   isApprovalRejected,
   listIssueComments,
   minimizeReview,
+  removeLabel,
   resolveReviewThread,
   updateIssueComment,
   withApiError,
@@ -244,6 +247,86 @@ COMMANDS.add(
         createIssueComment(token, owner, repo, pr, fullBody),
       );
       console.log(`Created sticky comment: ${result.html_url}`);
+    }
+  },
+);
+
+COMMANDS.add(
+  "post-comment",
+  "Post a new top-level comment on the pull request. Posts immediately. This is not " +
+    "enabled as an allowed-tool by default.",
+  {
+    body: {
+      long: "body-file",
+      map: readBodyFile,
+      required: true,
+      description: "Path to a file containing the comment body.",
+    },
+  },
+  async ({ body }) => {
+    const token = requireToken();
+    const { owner, repo } = repoFromEnv();
+    const pr = prNumberFromEnv();
+    const result = await withApiError(() =>
+      createIssueComment(token, owner, repo, pr, body),
+    );
+    console.log(`Posted comment: ${result.html_url}`);
+  },
+);
+
+COMMANDS.add(
+  "add-label",
+  "Add a label to the pull request. Fails if the label does not exist in the repository.",
+  {
+    label: {
+      map: required,
+      description:
+        "Label to add. Must already exist in the repository " +
+        "(use 'gh label list' to see available labels).",
+    },
+  },
+  async ({ label }) => {
+    const token = requireToken();
+    const { owner, repo } = repoFromEnv();
+    const pr = prNumberFromEnv();
+    try {
+      await addLabel(token, owner, repo, pr, label);
+    } catch (error) {
+      if (error instanceof GitHubApiError && error.status === 422) {
+        fail(
+          `Label "${label}" does not exist in this repository. ` +
+            "Use 'gh label list' to see available labels.",
+        );
+      }
+      fail(`${error.message}${apiErrorHint(error)}`);
+    }
+    console.log(`Added label: ${label}`);
+  },
+);
+
+COMMANDS.add(
+  "remove-label",
+  "Remove a label from the pull request. Silently succeeds if the label is not applied.",
+  {
+    label: {
+      map: required,
+      description: "Label to remove.",
+    },
+  },
+  async ({ label }) => {
+    const token = requireToken();
+    const { owner, repo } = repoFromEnv();
+    const pr = prNumberFromEnv();
+    let removed;
+    try {
+      removed = await removeLabel(token, owner, repo, pr, label);
+    } catch (error) {
+      fail(`${error.message}${apiErrorHint(error)}`);
+    }
+    if (removed) {
+      console.log(`Removed label: ${label}`);
+    } else {
+      console.log(`Label "${label}" was not applied; nothing to remove.`);
     }
   },
 );

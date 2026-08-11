@@ -137,4 +137,12 @@ export const responses = {
         html_url: `https://example/issues/comments/${comment_id}`,
       },
     }),
+  POST_issue_labels: (pr) =>
+    route("POST", `/issues/${pr}/labels$`, {
+      body: [{ id: 1, name: "bug", color: "ee0701" }],
+    }),
+  DELETE_issue_label: (pr, label) =>
+    route("DELETE", `/issues/${pr}/labels/${encodeURIComponent(label)}$`, {
+      body: [],
+    }),
 };

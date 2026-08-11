@@ -242,6 +242,38 @@ export async function createIssueComment(token, owner, repo, pullNumber, body) {
   return { id: data.id, html_url: data.html_url };
 }
 
+/** Adds a label to an issue/PR. Fails if the label does not exist in the repo. */
+export async function addLabel(token, owner, repo, issueNumber, label) {
+  await request(
+    token,
+    "POST",
+    `/repos/${owner}/${repo}/issues/${issueNumber}/labels`,
+    { labels: [label] },
+  );
+}
+
+/**
+ * Removes a label from an issue/PR.
+ *
+ * Returns false if the label was not applied (GitHub 404), true on success.
+ * Any other error is rethrown for the caller to handle.
+ */
+export async function removeLabel(token, owner, repo, issueNumber, label) {
+  try {
+    await request(
+      token,
+      "DELETE",
+      `/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof GitHubApiError && error.status === 404) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 /** Overwrites the body of an existing top-level (issue) comment. */
 export async function updateIssueComment(token, owner, repo, commentId, body) {
   const data = await request(

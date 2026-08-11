@@ -313,6 +313,121 @@ describe("pr-review CLI", () => {
     });
   });
 
+  it("post-comment posts a new top-level comment immediately", async () => {
+    await withMockGitHub(
+      responses.POST_issue_comment(5, 600),
+
+      async ({ requests }) => {
+        const { stdout } = await run([
+          "post-comment",
+          "--body-file",
+          await bodyFile("hello from Claude"),
+        ]);
+        expect(stdout).toMatch(/Posted comment/);
+
+        const [req] = filterByUrlEnd(requests, "/issues/5/comments");
+        expect(req.body.body).toBe("hello from Claude");
+      },
+    );
+  });
+
+  it("post-comment requires --body-file", async () => {
+    await withMockGitHub(async ({ requests }) => {
+      await expect(run(["post-comment"])).rejects.toThrow(
+        /--body-file is required/,
+      );
+      expect(requests).toHaveLength(0);
+    });
+  });
+
+  it("add-label adds a label", async () => {
+    await withMockGitHub(
+      responses.POST_issue_labels(5),
+
+      async ({ requests }) => {
+        const { stdout } = await run(["add-label", "--label", "bug"]);
+        expect(stdout).toMatch(/Added label: bug/);
+
+        const [req] = filterByUrlEnd(requests, "/issues/5/labels");
+        expect(req.body.labels).toEqual(["bug"]);
+      },
+    );
+  });
+
+  it("add-label fails loudly when the label does not exist in the repository", async () => {
+    await withMockGitHub(
+      route("POST", "/issues/5/labels$", {
+        status: 422,
+        body: {
+          message: "Validation Failed",
+          errors: [
+            {
+              value: "nonexistent",
+              resource: "Label",
+              field: "name",
+              code: "invalid",
+            },
+          ],
+        },
+      }),
+
+      async () => {
+        await expect(
+          run(["add-label", "--label", "nonexistent"]),
+        ).rejects.toThrow(/does not exist.*gh label list/s);
+      },
+    );
+  });
+
+  it("add-label requires --label", async () => {
+    await withMockGitHub(async ({ requests }) => {
+      await expect(run(["add-label"])).rejects.toThrow(/--label is required/);
+      expect(requests).toHaveLength(0);
+    });
+  });
+
+  it("remove-label removes a label", async () => {
+    await withMockGitHub(
+      responses.DELETE_issue_label(5, "bug"),
+
+      async ({ requests }) => {
+        const { stdout } = await run(["remove-label", "--label", "bug"]);
+        expect(stdout).toMatch(/Removed label: bug/);
+
+        expect(
+          requests.some((r) => r.url.endsWith("/issues/5/labels/bug")),
+        ).toBe(true);
+      },
+    );
+  });
+
+  it("remove-label silently succeeds when the label is not applied", async () => {
+    await withMockGitHub(
+      route("DELETE", "/issues/5/labels/bug$", {
+        status: 404,
+        body: { message: "Label does not exist" },
+      }),
+
+      async ({ requests }) => {
+        const { stdout } = await run(["remove-label", "--label", "bug"]);
+        expect(stdout).toMatch(/not applied/);
+
+        expect(
+          requests.some((r) => r.url.endsWith("/issues/5/labels/bug")),
+        ).toBe(true);
+      },
+    );
+  });
+
+  it("remove-label requires --label", async () => {
+    await withMockGitHub(async ({ requests }) => {
+      await expect(run(["remove-label"])).rejects.toThrow(
+        /--label is required/,
+      );
+      expect(requests).toHaveLength(0);
+    });
+  });
+
   it("approve-review posts an APPROVE event with no comments queued", async () => {
     await withMockGitHub(
       responses.GET_pull(5, "deadbeef"),
