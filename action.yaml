@@ -159,29 +159,21 @@ runs:
       run: |
         # Build claude_args
         #
-        # claude-code-action parses claude_args by running it through
-        # shell-quote (see parseClaudeArgsToExtraArgs in its
-        # base-action/src/parse-sdk-options.ts), so any value we interpolate
-        # -- an allowed-tools entry, or github.action_path below -- has to be
-        # shell-quoted, not just wrapped in a fixed pair of double quotes: a
-        # value containing a `"`, `$`, or `` ` `` would otherwise be
-        # interpreted rather than taken literally, and could in principle
-        # inject additional arguments. `shQuote` below applies the standard
-        # POSIX single-quote escape (replacing each `'` with `'\''`), which
-        # is exactly what that parser expects.
+        # claude-code-action parses claude_args with shell-quote (see
+        # parseClaudeArgsToExtraArgs in base-action/src/parse-sdk-options.ts),
+        # so any value we interpolate, e.g. an allowed-tools entry, has to be
+        # shell-quoted. `shQuote` below applies the standard POSIX single-quote
+        # escape (replacing each `'` with `'\''`), which is exactly what that
+        # parser expects.
         #
-        # shQuote doesn't strip newlines, and today's inputs can't contain
-        # one (allowed-tools entries go through `tr '\n' ','` upstream), but
-        # `key=value` is a single-line format: a stray newline in the value
-        # would corrupt $GITHUB_OUTPUT and fail the step. Using the
-        # heredoc-with-random-delimiter form (same as the diff_section output
-        # below) instead of `value=...` avoids relying on that upstream
-        # guarantee still holding here.
+        # Today's inputs can't contain a newline, but this is hardened in case
+        # that changes in the future.
         set -euo pipefail
 
         VALUE=$(node -e '
           function shQuote(value) {
-            return "\x27" + String(value).replace(/\x27/g, "\x27\\\x27\x27") + "\x27";
+            return "\x27" + String(value).replace(/\x27/g, "\x27\\\x27\x27") +
+              "\x27";
           }
 
           const mcpConfig = JSON.stringify({
@@ -196,7 +188,8 @@ runs:
           console.log([
             "--allowedTools", shQuote(process.env.ALLOWED_TOOLS_LIST),
             "--mcp-config", shQuote(mcpConfig),
-            "--permission-prompt-tool", shQuote("mcp__pr-review-permission-prompt__check"),
+            "--permission-prompt-tool",
+            shQuote("mcp__pr-review-permission-prompt__check"),
           ].join(" "));
         ')
 
