@@ -318,8 +318,10 @@ runs:
         GH_TOKEN: ${{ github.token }}
         AVAILABLE_LABELS_PATTERNS: ${{ inputs.available-labels }}
       run: |
+        # Fetch available labels
         set -euo pipefail
 
+        # Filter labels from repo with $AVAILABLE_LABELS_PATTERNS
         node "$CLI_DIR/fetch-available-labels"
 
         if [[ -n "$AVAILABLE_LABELS_PATTERNS" ]]; then
