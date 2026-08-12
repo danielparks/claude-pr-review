@@ -250,9 +250,7 @@ COMMANDS.add(
 
 COMMANDS.add(
   "post-comment",
-  "Post a new top-level comment immediately. Unlike update-sticky-comment, " +
-    "this creates a new comment every time it is called. This is not enabled " +
-    "as an allowed-tool by default.",
+  "Post a new top-level comment immediately.",
   {
     body: {
       long: "body-file",

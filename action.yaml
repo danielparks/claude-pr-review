@@ -88,6 +88,7 @@ inputs:
       Bash(pr-review comment-review:*)
       Bash(pr-review list-queue:*)
       Bash(pr-review discard-queue:*)
+      Bash(pr-review post-comment:*)
 
       # From https://code.claude.com/docs/en/agent-sdk/permissions.md:
       #

@@ -68,14 +68,6 @@ This isn’t documented in `action.yaml`’s default prompt — deliberately, si
 
 A few `pr-review` subcommands are deliberately left out of the default `allowed-tools` list in `action.yaml`. They’re real capabilities some workflows want, but they change what kind of thing Claude _is_ in a PR — from “leaves comments” to “affects merge state” — so they’re opt-in only, enabled by adding the relevant line(s) below to the `additional-allowed-tools` input, and should be paired with your own `additional-prompt` text describing when Claude should use them.
 
-### `post-comment --body-file PATH`
-
-Posts a new top-level PR comment immediately. Unlike `update-sticky-comment`, this creates a fresh comment every time — there's no deduplication or batching.
-
-**Danger:** unlike every other default tool, which only ever appends to existing reviews, this posts immediately and creates a new visible comment on every invocation. Claude could spam the PR if called in a loop or misconfigured.
-
-Like `reply-inline-comment`, this shares the duplicate-comment risk in the narrow window between the network request being sent and the response being received (see "Why a queue directory" above). There's no idempotency key on the issue comments API.
-
 ### `resolve-my-thread --thread-id ID` / `resolve-any-thread --thread-id ID`
 
 Resolves an inline-comment thread via GitHub’s `resolveReviewThread` GraphQL mutation, given the thread’s GraphQL node id. [gh-pr-render] shows this above the diff at the very start of the thread.

@@ -103,6 +103,7 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(pr-review comment-review:*)
     Bash(pr-review list-queue:*)
     Bash(pr-review discard-queue:*)
+    Bash(pr-review post-comment:*)
 
     # From https://code.claude.com/docs/en/agent-sdk/permissions.md:
     #
@@ -142,13 +143,14 @@ Defaults to: `disabled`
 
 ## Details
 
-### Posting review comments
+### Posting comments and reviews
 
 This action bundles its own CLI tool, [`cli/pr-review`], that `action.yaml` puts on `PATH` for Claude to run via its Bash tool:
 
 - `pr-review queue-inline-comment` queues an inline comment on disk. Nothing is posted to GitHub until `comment-review` is called.
 - `pr-review comment-review` posts everything queued by `queue-inline-comment`, plus an optional top-level body, as a single grouped comment review. Claude doesn’t have to call this itself — `action.yaml` runs it automatically after Claude’s turn ends if anything is still queued.
 - `pr-review reply-inline-comment` replies to an existing inline comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
+- `pr-review post-comment` can be used to post a new top-level comment immediately. This differs from `gh pr comment` in that it doesn’t have the ability to edit or delete existing comments. It is not mentioned in the default prompt.
 - `pr-review list-queue` and `pr-review discard-queue --dir PATH` let Claude recover if a submission fails for a reason that won’t change on retry (e.g. GitHub rejecting an inline comment’s line number): after fixing the problem and resubmitting successfully, Claude can discard the original failed batch so the automatic post-turn sweep doesn’t keep retrying — and failing on — it.
 - `pr-review --help` lists every command; `pr-review <command> --help` shows that command’s flags.
 
