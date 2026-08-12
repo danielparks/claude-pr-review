@@ -22,12 +22,11 @@ function shQuote(value) {
 async function writeOutput(name, value) {
   const delim = `EOF-${randomBytes(8).toString("hex")}`;
   const valueStr = String(value);
-  for (const line of valueStr.split("\n")) {
-    if (line.startsWith(delim)) {
-      throw new Error(
-        `Output '${name}' has a line starting with delimiter '${delim}' — retry the workflow`,
-      );
-    }
+  if (valueStr.split("\n").some((line) => line === delim)) {
+    throw new Error(
+      `Output '${name}' has line matching random delimiter '${delim}'. Retry ` +
+        "the workflow.",
+    );
   }
   await appendFile(
     process.env.GITHUB_OUTPUT,
@@ -115,7 +114,9 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error(err);
+main().catch((error) => {
+  // If error resolves to multiple lines only the first line will be considered
+  // an error, which is fine.
+  console.error(`::error::${error}`);
   process.exit(1);
 });
