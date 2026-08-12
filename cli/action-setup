@@ -13,6 +13,10 @@ import { fetchAndWriteLabels } from "./lib/labels.js";
 
 const execFileAsync = promisify(execFile);
 
+async function run(command, ...args) {
+  return await execFileAsync(command, args);
+}
+
 function shQuote(value) {
   return "'" + String(value).replace(/'/g, "'\\''") + "'";
 }
@@ -50,19 +54,12 @@ async function main() {
   await appendFile(process.env.GITHUB_PATH, `${cliDir}\n`);
 
   // Initialize the review queue and Claude's scratch directory.
-  await execFileAsync("node", [`${cliDir}/pr-review`, "init"]);
+  await run("node", `${cliDir}/pr-review`, "init");
   await mkdir("/tmp/pr-review-scratch", { recursive: true });
 
   // Install gh-pr-render and save its output for Claude's prompt.
-  await execFileAsync("npm", [
-    "install",
-    "-g",
-    `gh-pr-render@${renderVersion}`,
-  ]);
-  const { stdout: prContext } = await execFileAsync("gh-pr-render", [
-    ownerRepo,
-    prNumber,
-  ]);
+  await run("npm", "install", "-g", `gh-pr-render@${renderVersion}`);
+  const { stdout: prContext } = await run("gh-pr-render", ownerRepo, prNumber);
   await writeOutput("pr_context", prContext.trimEnd());
 
   // Build the comma-separated allowed-tools list, stripping blank lines and
@@ -77,10 +74,11 @@ async function main() {
   await fetchAndWriteLabels(token, owner, repo, labelsPatterns);
 
   if (labelsPatterns.trim()) {
-    const { stdout: labelContext } = await execFileAsync("node", [
+    const { stdout: labelContext } = await run(
+      "node",
       `${cliDir}/pr-review`,
       "list-available-labels",
-    ]);
+    );
     await writeOutput("label_context", labelContext.trimEnd());
   }
 
