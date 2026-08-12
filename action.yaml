@@ -405,7 +405,7 @@ runs:
     - name: Submit any review comments Claude queued but didn't post
       # Runs even if the step above failed or Claude never called
       # `comment-review` itself (it's a no-op when nothing was ever queued).
-      if: always() && steps.diff.outputs.skip != 'true'
+      if: always() && steps.claude-args.outcome == 'success'
       shell: bash
       env:
         # The Claude App token, if the calling workflow granted `id-token:
@@ -434,7 +434,7 @@ runs:
 
     - name: Parse retention input
       id: retention
-      if: always() && steps.diff.outputs.skip != 'true'
+      if: always() && steps.claude-args.outcome == 'success'
       shell: bash
       env:
         RETENTION: ${{ inputs.thinking-log-artifact-retention }}
