@@ -1,0 +1,159 @@
+#!/usr/bin/env node
+
+// Combines the five action.yaml setup steps that run between the diff check
+// and the Claude step into one script. Writes to $GITHUB_ENV, $GITHUB_PATH,
+// and $GITHUB_OUTPUT.
+//
+// Inputs (environment variables set by the action.yaml step):
+//   CLI_DIR                    path to the cli/ directory
+//   PR_NUMBER                  pull request number
+//   GH_TOKEN                   GitHub token for API calls
+//   RENDER_VERSION             gh-pr-render package version
+//   AVAILABLE_LABELS_PATTERNS  newline-separated glob patterns, or empty
+//   ALLOWED_TOOLS              newline-separated allowed-tools list
+//
+// Outputs written to $GITHUB_OUTPUT:
+//   pr_context     rendered PR discussion (from gh-pr-render)
+//   label_context  available labels description (only when labels configured)
+//   claude_args    --allowedTools, --mcp-config, --permission-prompt-tool
+
+import { appendFileSync, mkdirSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { randomBytes } from "node:crypto";
+import { readAvailableLabels } from "./lib/available-labels.js";
+import { initQueue, queueRoot } from "./lib/queue.js";
+
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} environment variable is required`);
+  return value;
+}
+
+function appendOutput(file, name, value) {
+  const delim = `EOF-${randomBytes(8).toString("hex")}`;
+  appendFileSync(file, `${name}<<${delim}\n${value}\n${delim}\n`);
+}
+
+function shQuote(value) {
+  return "'" + String(value).replace(/'/g, "'\\''") + "'";
+}
+
+async function main() {
+  const cliDir = requireEnv("CLI_DIR");
+  const prNumber = requireEnv("PR_NUMBER");
+  const renderVersion = requireEnv("RENDER_VERSION");
+  const githubOutput = requireEnv("GITHUB_OUTPUT");
+  const githubEnv = requireEnv("GITHUB_ENV");
+  const githubPath = requireEnv("GITHUB_PATH");
+
+  // Set up environment for subsequent steps.
+  appendFileSync(githubEnv, `CLI_DIR=${cliDir}\n`);
+  appendFileSync(githubPath, `${cliDir}\n`);
+  appendFileSync(githubEnv, `PR_NUMBER=${prNumber}\n`);
+
+  // Initialize the review queue directory. Fails if it already exists (EEXIST
+  // means a previous job's queue was left behind on a self-hosted runner).
+  const root = queueRoot();
+  try {
+    await initQueue(root);
+  } catch (error) {
+    if (error.code === "EEXIST") {
+      throw new Error(
+        `${root} already exists — refusing to reuse a queue directory ` +
+          "this job didn't create fresh. On a self-hosted runner, make " +
+          "sure RUNNER_TEMP is cleared between jobs.",
+      );
+    }
+    throw error;
+  }
+  console.log(`Created queue directory: ${root}`);
+
+  // Scratch space for Claude to stage --body-file content in.
+  mkdirSync("/tmp/pr-review-scratch", { recursive: true });
+
+  // Render the PR discussion. npm inherits the current environment, which
+  // includes GH_TOKEN and GITHUB_REPOSITORY for gh-pr-render.
+  const renderTmp = await mkdtemp(join(tmpdir(), "gh-pr-render-"));
+  const prContext = execFileSync(
+    "npm",
+    [
+      "exec",
+      "--yes",
+      "--prefix",
+      renderTmp,
+      `--package=gh-pr-render@${renderVersion}`,
+      "--",
+      "gh-pr-render",
+      process.env.GITHUB_REPOSITORY,
+      prNumber,
+    ],
+    { encoding: "utf8" },
+  ).trimEnd();
+  appendOutput(githubOutput, "pr_context", prContext);
+
+  // Build the allowed-tools list (strip blank lines and comment lines).
+  const toolsList = (process.env.ALLOWED_TOOLS || "")
+    .split("\n")
+    .filter((line) => !/^\s*(#.*)?$/.test(line))
+    .join(",");
+
+  // Fetch available labels (writes to the labels file read by pr-review).
+  execFileSync("node", [join(cliDir, "fetch-available-labels")], {
+    stdio: "inherit",
+  });
+
+  // Build label context for the prompt when labels are configured.
+  if (process.env.AVAILABLE_LABELS_PATTERNS?.trim()) {
+    const labels = await readAvailableLabels();
+    let labelContext;
+    if (labels.length === 0) {
+      labelContext = "No labels are available for Claude to add or remove.";
+    } else {
+      const lines = ["The following labels are available for this PR:", ""];
+      for (const { name, description } of labels) {
+        lines.push(`- ${name}${description ? `: ${description}` : ""}`);
+      }
+      lines.push(
+        "",
+        "Use `pr-review add-label LABEL` to add a label and",
+        "`pr-review remove-label LABEL` to remove a label.",
+      );
+      labelContext = lines.join("\n");
+    }
+    appendOutput(githubOutput, "label_context", labelContext);
+  }
+
+  // Build claude_args.
+  //
+  // claude-code-action parses claude_args with shell-quote (see
+  // parseClaudeArgsToExtraArgs in base-action/src/parse-sdk-options.ts),
+  // so every interpolated value must be POSIX single-quoted. shQuote() applies
+  // the standard escape (replacing each ' with '\'').
+  const mcpConfig = JSON.stringify({
+    mcpServers: {
+      "pr-review-permission-prompt": {
+        command: "node",
+        args: [join(cliDir, "pr-review-permission-prompt")],
+      },
+    },
+  });
+
+  const claudeArgs = [
+    "--allowedTools",
+    shQuote(toolsList),
+    "--mcp-config",
+    shQuote(mcpConfig),
+    "--permission-prompt-tool",
+    shQuote("mcp__pr-review-permission-prompt__check"),
+  ].join(" ");
+
+  appendOutput(githubOutput, "claude_args", claudeArgs);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
