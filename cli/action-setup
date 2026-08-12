@@ -1,0 +1,121 @@
+#!/usr/bin/env node
+
+// Runs between the diff check and Claude's turn: sets up the environment,
+// renders the PR discussion, builds the allowed-tools list, fetches available
+// labels, and writes claude_args. Outputs land in $GITHUB_OUTPUT and
+// $GITHUB_ENV/$GITHUB_PATH for subsequent steps.
+
+import { randomBytes } from "node:crypto";
+import { appendFile, mkdir, mkdtemp } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import { fetchAndWriteLabels } from "./lib/labels.js";
+
+const execFileAsync = promisify(execFile);
+
+function shQuote(value) {
+  return "'" + String(value).replace(/'/g, "'\\''") + "'";
+}
+
+async function writeOutput(name, value) {
+  const delim = `EOF-${randomBytes(8).toString("hex")}`;
+  const valueStr = String(value);
+  for (const line of valueStr.split("\n")) {
+    if (line.startsWith(delim)) {
+      throw new Error(
+        `Output '${name}' has a line starting with delimiter '${delim}' — retry the workflow`,
+      );
+    }
+  }
+  await appendFile(
+    process.env.GITHUB_OUTPUT,
+    `${name}<<${delim}\n${valueStr}\n${delim}\n`,
+  );
+}
+
+async function main() {
+  const cliDir = process.env.CLI_DIR;
+  const prNumber = process.env.PR_NUMBER;
+  const token = process.env.GH_TOKEN;
+  const renderVersion = process.env.RENDER_VERSION;
+  const labelsPatterns = process.env.AVAILABLE_LABELS_PATTERNS || "";
+  const allowedTools = process.env.ALLOWED_TOOLS || "";
+
+  // Make CLI_DIR and PR_NUMBER available to subsequent steps.
+  await appendFile(
+    process.env.GITHUB_ENV,
+    `CLI_DIR=${cliDir}\nPR_NUMBER=${prNumber}\n`,
+  );
+  await appendFile(process.env.GITHUB_PATH, `${cliDir}\n`);
+
+  // Initialize the review queue and Claude's scratch directory.
+  await execFileAsync("node", [`${cliDir}/pr-review`, "init"]);
+  await mkdir("/tmp/pr-review-scratch", { recursive: true });
+
+  // Render the PR discussion into Claude's prompt context.
+  const tempDir = await mkdtemp(join(tmpdir(), "gh-pr-render-"));
+  const { stdout: prContext } = await execFileAsync("npm", [
+    "exec",
+    "--yes",
+    "--prefix",
+    tempDir,
+    `--package=gh-pr-render@${renderVersion}`,
+    "--",
+    "gh-pr-render",
+    process.env.GITHUB_REPOSITORY,
+    prNumber,
+  ]);
+  await writeOutput("pr_context", prContext.trimEnd());
+
+  // Build the comma-separated allowed-tools list, stripping blank lines and
+  // comment lines.
+  const toolsList = allowedTools
+    .split("\n")
+    .filter((line) => !/^\s*(#.*)?$/.test(line))
+    .join(",");
+
+  // Fetch labels matching the operator's configured patterns and write them so
+  // pr-review's label subcommands can enforce the allowlist.
+  const [owner, repo] = (process.env.GITHUB_REPOSITORY || "").split("/");
+  await fetchAndWriteLabels(token, owner, repo, labelsPatterns);
+
+  if (labelsPatterns.trim()) {
+    const { stdout: labelContext } = await execFileAsync("node", [
+      `${cliDir}/pr-review`,
+      "list-available-labels",
+    ]);
+    await writeOutput("label_context", labelContext.trimEnd());
+  }
+
+  // Build claude_args for claude-code-action.
+  // claude-code-action parses claude_args with shell-quote, so each
+  // interpolated value must be POSIX-shell-quoted (single-quoting with
+  // each ' replaced by '\'').
+  const mcpConfig = JSON.stringify({
+    mcpServers: {
+      "pr-review-permission-prompt": {
+        command: "node",
+        args: [`${cliDir}/pr-review-permission-prompt`],
+      },
+    },
+  });
+
+  await writeOutput(
+    "value",
+    [
+      "--allowedTools",
+      shQuote(toolsList),
+      "--mcp-config",
+      shQuote(mcpConfig),
+      "--permission-prompt-tool",
+      shQuote("mcp__pr-review-permission-prompt__check"),
+    ].join(" "),
+  );
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

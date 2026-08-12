@@ -243,146 +243,20 @@ runs:
 
         cp .pr-cache/new.patch .pr-cache/prev.patch
 
-    - name: Set up environment
+    - name: Set up environment and build Claude context
+      id: setup
       if: steps.diff.outputs.skip != 'true'
       shell: bash
       env:
         CLI_DIR: ${{ github.action_path }}/cli
         PR_NUMBER: ${{ github.event.pull_request.number }}
-      run: | # zizmor: ignore[github-env] not user input
-        # Set up environment
-        set -euo pipefail
-
-        # Convenience for future steps
-        echo "CLI_DIR=$CLI_DIR" >> "$GITHUB_ENV"
-
-        # For pr-review
-        echo "$CLI_DIR" >> "$GITHUB_PATH"
-        echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
-
-        # Initialize queue directory
-        node "$CLI_DIR/pr-review" init
-
-        # Scratch space for Claude to stage --body-file content in.
-        mkdir -p /tmp/pr-review-scratch
-
-    - name: Render PR discussion
-      id: render
-      if: steps.diff.outputs.skip != 'true'
-      shell: bash
-      env:
         GH_TOKEN: ${{ github.token }}
         RENDER_VERSION: ${{ inputs.gh-pr-render-version }}
-      run: |
-        # Generate PR context
-        set -euo pipefail
-
-        # Don't use local node_modules. Without `--prefix` it fails when running
-        # in the gh-pr-render repo.
-        PR_CONTEXT=$(
-          npm exec --yes --prefix $(mktemp -d) \
-            --package=gh-pr-render@"$RENDER_VERSION" -- \
-            gh-pr-render "$GITHUB_REPOSITORY" "$PR_NUMBER"
-        )
-        DELIM=$(openssl rand -hex 8)
-        {
-          echo "pr_context<<EOF-${DELIM}"
-          echo "$PR_CONTEXT"
-          echo "EOF-${DELIM}"
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Build allowed-tools list
-      id: tools
-      if: steps.diff.outputs.skip != 'true'
-      shell: bash
-      env:
+        AVAILABLE_LABELS_PATTERNS: ${{ inputs.available-labels }}
         ALLOWED_TOOLS: |
           ${{ inputs.allowed-tools }}
           ${{ inputs.additional-allowed-tools }}
-      run: |
-        # Build allowed-tools list
-        set -euo pipefail
-
-        echo "list=$(
-          echo "$ALLOWED_TOOLS" \
-            | grep -Ev '^[[:space:]]*(#.*)?$' \
-            | tr '\n' ',' \
-            | sed 's/,$//' \
-          )" >> "$GITHUB_OUTPUT"
-
-    - name: Fetch available labels
-      id: labels
-      if: steps.diff.outputs.skip != 'true'
-      shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
-        AVAILABLE_LABELS_PATTERNS: ${{ inputs.available-labels }}
-      run: |
-        # Fetch available labels
-        set -euo pipefail
-
-        # Filter labels from repo with $AVAILABLE_LABELS_PATTERNS
-        node "$CLI_DIR/fetch-available-labels"
-
-        if [[ -n "$AVAILABLE_LABELS_PATTERNS" ]]; then
-          LABEL_CONTEXT=$(node "$CLI_DIR/pr-review" list-available-labels)
-          DELIM=$(openssl rand -hex 8)
-          {
-            echo "label_context<<EOF-${DELIM}"
-            echo "$LABEL_CONTEXT"
-            echo "EOF-${DELIM}"
-          } >> "$GITHUB_OUTPUT"
-        fi
-
-    - name: Build claude_args
-      id: claude-args
-      if: steps.diff.outputs.skip != 'true'
-      shell: bash
-      env:
-        ALLOWED_TOOLS_LIST: ${{ steps.tools.outputs.list }}
-      run: |
-        # Build claude_args
-        #
-        # claude-code-action parses claude_args with shell-quote (see
-        # parseClaudeArgsToExtraArgs in base-action/src/parse-sdk-options.ts),
-        # so any value we interpolate, e.g. an allowed-tools entry, has to be
-        # shell-quoted. `shQuote` below applies the standard POSIX single-quote
-        # escape (replacing each `'` with `'\''`), which is exactly what that
-        # parser expects.
-        #
-        # Today's inputs can't contain a newline, but this is hardened in case
-        # that changes in the future.
-        set -euo pipefail
-
-        VALUE=$(node -e '
-          function shQuote(value) {
-            return "\x27" + String(value).replace(/\x27/g, "\x27\\\x27\x27") +
-              "\x27";
-          }
-
-          const mcpConfig = JSON.stringify({
-            mcpServers: {
-              "pr-review-permission-prompt": {
-                command: "node",
-                args: [`${process.env.CLI_DIR}/pr-review-permission-prompt`],
-              },
-            },
-          });
-
-          console.log([
-            "--allowedTools", shQuote(process.env.ALLOWED_TOOLS_LIST),
-            "--mcp-config", shQuote(mcpConfig),
-            "--permission-prompt-tool",
-            shQuote("mcp__pr-review-permission-prompt__check"),
-          ].join(" "));
-        ')
-
-        DELIM=$(openssl rand -hex 8)
-        {
-          echo "value<<EOF-${DELIM}"
-          echo "$VALUE"
-          echo "EOF-${DELIM}"
-        } >> "$GITHUB_OUTPUT"
+      run: node "$CLI_DIR/action-setup"
 
     - uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e # v1.0.123
       id: claude
@@ -397,17 +271,17 @@ runs:
           ${{ inputs.prompt }}
           ${{ inputs.additional-prompt }}
 
-          ${{ steps.labels.outputs.label_context }}
+          ${{ steps.setup.outputs.label_context }}
 
           ${{ steps.diff.outputs.diff_section }}
 
-          ${{ steps.render.outputs.pr_context }}
-        claude_args: ${{ steps.claude-args.outputs.value }}
+          ${{ steps.setup.outputs.pr_context }}
+        claude_args: ${{ steps.setup.outputs.value }}
 
     - name: Submit any review comments Claude queued but didn't post
       # Runs even if the step above failed or Claude never called
       # `comment-review` itself (it's a no-op when nothing was ever queued).
-      if: always() && steps.claude-args.outcome == 'success'
+      if: always() && steps.setup.outcome == 'success'
       shell: bash
       env:
         # The Claude App token, if the calling workflow granted `id-token:
@@ -436,7 +310,7 @@ runs:
 
     - name: Parse retention input
       id: retention
-      if: always() && steps.claude-args.outcome == 'success'
+      if: always() && steps.setup.outcome == 'success'
       shell: bash
       env:
         RETENTION: ${{ inputs.thinking-log-artifact-retention }}
