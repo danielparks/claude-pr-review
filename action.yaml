@@ -172,91 +172,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Build allowed-tools list
-      id: tools
-      shell: bash
-      env:
-        ALLOWED_TOOLS: |
-          ${{ inputs.allowed-tools }}
-          ${{ inputs.additional-allowed-tools }}
-      run: |
-        # Build allowed-tools list
-        set -euo pipefail
-
-        echo "list=$(
-          echo "$ALLOWED_TOOLS" \
-            | grep -Ev '^[[:space:]]*(#.*)?$' \
-            | tr '\n' ',' \
-            | sed 's/,$//' \
-          )" >> "$GITHUB_OUTPUT"
-
-    - name: Build claude_args
-      id: claude-args
-      shell: bash
-      env:
-        ALLOWED_TOOLS_LIST: ${{ steps.tools.outputs.list }}
-        PERMISSION_PROMPT_SCRIPT: ${{ github.action_path }}/cli/pr-review-permission-prompt
-      run: |
-        # Build claude_args
-        #
-        # claude-code-action parses claude_args with shell-quote (see
-        # parseClaudeArgsToExtraArgs in base-action/src/parse-sdk-options.ts),
-        # so any value we interpolate, e.g. an allowed-tools entry, has to be
-        # shell-quoted. `shQuote` below applies the standard POSIX single-quote
-        # escape (replacing each `'` with `'\''`), which is exactly what that
-        # parser expects.
-        #
-        # Today's inputs can't contain a newline, but this is hardened in case
-        # that changes in the future.
-        set -euo pipefail
-
-        VALUE=$(node -e '
-          function shQuote(value) {
-            return "\x27" + String(value).replace(/\x27/g, "\x27\\\x27\x27") +
-              "\x27";
-          }
-
-          const mcpConfig = JSON.stringify({
-            mcpServers: {
-              "pr-review-permission-prompt": {
-                command: "node",
-                args: [process.env.PERMISSION_PROMPT_SCRIPT],
-              },
-            },
-          });
-
-          console.log([
-            "--allowedTools", shQuote(process.env.ALLOWED_TOOLS_LIST),
-            "--mcp-config", shQuote(mcpConfig),
-            "--permission-prompt-tool",
-            shQuote("mcp__pr-review-permission-prompt__check"),
-          ].join(" "));
-        ')
-
-        DELIM=$(openssl rand -hex 8)
-        {
-          echo "value<<EOF-${DELIM}"
-          echo "$VALUE"
-          echo "EOF-${DELIM}"
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Configure pr-review CLI
-      shell: bash
-      env:
-        CLI_DIR: ${{ github.action_path }}/cli
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-      run: | # zizmor: ignore[github-env] not user input
-        # Put pr-review (see cli/README.md) on PATH for Claude's Bash tool, and
-        # expose PR_NUMBER as an ambient env var. GITHUB_TOKEN is set by Claude
-        # to the special Claude App token.
-        set -euo pipefail
-        echo "$CLI_DIR" >> "$GITHUB_PATH"
-        echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
-        node "$CLI_DIR/pr-review" init
-
-        # Scratch space for Claude to stage --body-file content in.
-        mkdir -p /tmp/pr-review-scratch
-
     - name: diff cache
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
@@ -351,6 +266,43 @@ runs:
           echo "EOF-${DELIM}"
         } >> "$GITHUB_OUTPUT"
 
+    - name: Configure pr-review CLI
+      if: steps.diff.outputs.skip != 'true'
+      shell: bash
+      env:
+        CLI_DIR: ${{ github.action_path }}/cli
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: | # zizmor: ignore[github-env] not user input
+        # Put pr-review (see cli/README.md) on PATH for Claude's Bash tool, and
+        # expose PR_NUMBER as an ambient env var. GITHUB_TOKEN is set by Claude
+        # to the special Claude App token.
+        set -euo pipefail
+        echo "$CLI_DIR" >> "$GITHUB_PATH"
+        echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+        node "$CLI_DIR/pr-review" init
+
+        # Scratch space for Claude to stage --body-file content in.
+        mkdir -p /tmp/pr-review-scratch
+
+    - name: Build allowed-tools list
+      id: tools
+      if: steps.diff.outputs.skip != 'true'
+      shell: bash
+      env:
+        ALLOWED_TOOLS: |
+          ${{ inputs.allowed-tools }}
+          ${{ inputs.additional-allowed-tools }}
+      run: |
+        # Build allowed-tools list
+        set -euo pipefail
+
+        echo "list=$(
+          echo "$ALLOWED_TOOLS" \
+            | grep -Ev '^[[:space:]]*(#.*)?$' \
+            | tr '\n' ',' \
+            | sed 's/,$//' \
+          )" >> "$GITHUB_OUTPUT"
+
     - name: Fetch available labels
       id: labels
       if: steps.diff.outputs.skip != 'true'
@@ -372,6 +324,57 @@ runs:
             echo "EOF-${DELIM}"
           } >> "$GITHUB_OUTPUT"
         fi
+
+    - name: Build claude_args
+      id: claude-args
+      if: steps.diff.outputs.skip != 'true'
+      shell: bash
+      env:
+        ALLOWED_TOOLS_LIST: ${{ steps.tools.outputs.list }}
+        PERMISSION_PROMPT_SCRIPT: ${{ github.action_path }}/cli/pr-review-permission-prompt
+      run: |
+        # Build claude_args
+        #
+        # claude-code-action parses claude_args with shell-quote (see
+        # parseClaudeArgsToExtraArgs in base-action/src/parse-sdk-options.ts),
+        # so any value we interpolate, e.g. an allowed-tools entry, has to be
+        # shell-quoted. `shQuote` below applies the standard POSIX single-quote
+        # escape (replacing each `'` with `'\''`), which is exactly what that
+        # parser expects.
+        #
+        # Today's inputs can't contain a newline, but this is hardened in case
+        # that changes in the future.
+        set -euo pipefail
+
+        VALUE=$(node -e '
+          function shQuote(value) {
+            return "\x27" + String(value).replace(/\x27/g, "\x27\\\x27\x27") +
+              "\x27";
+          }
+
+          const mcpConfig = JSON.stringify({
+            mcpServers: {
+              "pr-review-permission-prompt": {
+                command: "node",
+                args: [process.env.PERMISSION_PROMPT_SCRIPT],
+              },
+            },
+          });
+
+          console.log([
+            "--allowedTools", shQuote(process.env.ALLOWED_TOOLS_LIST),
+            "--mcp-config", shQuote(mcpConfig),
+            "--permission-prompt-tool",
+            shQuote("mcp__pr-review-permission-prompt__check"),
+          ].join(" "));
+        ')
+
+        DELIM=$(openssl rand -hex 8)
+        {
+          echo "value<<EOF-${DELIM}"
+          echo "$VALUE"
+          echo "EOF-${DELIM}"
+        } >> "$GITHUB_OUTPUT"
 
     - uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e # v1.0.123
       id: claude
