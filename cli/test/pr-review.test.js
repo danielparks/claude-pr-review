@@ -967,4 +967,28 @@ describe("pr-review CLI", () => {
       /Unknown command: not-a-real-command.*discard-queue/s,
     );
   });
+
+  describe("post-comment", () => {
+    it("posts a new top-level comment immediately", async () => {
+      const bodyPath = await bodyFile("Hello from Claude");
+      await withMockGitHub(
+        responses.POST_issue_comment(5, 999),
+
+        async ({ requests }) => {
+          const { stdout } = await run([
+            "post-comment",
+            "--body-file",
+            bodyPath,
+          ]);
+          expect(stdout).toContain("Posted comment:");
+          const [req] = filterByUrlEnd(requests, "/issues/5/comments");
+          expect(req.body).toEqual({ body: "Hello from Claude" });
+        },
+      );
+    });
+
+    it("fails when --body-file is not provided", async () => {
+      await expect(run(["post-comment"])).rejects.toThrow(/--body-file/);
+    });
+  });
 });

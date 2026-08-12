@@ -248,6 +248,30 @@ COMMANDS.add(
   },
 );
 
+COMMANDS.add(
+  "post-comment",
+  "Post a new top-level comment immediately. Unlike update-sticky-comment, " +
+    "this creates a new comment every time it is called. This is not enabled " +
+    "as an allowed-tool by default.",
+  {
+    body: {
+      long: "body-file",
+      map: readBodyFile,
+      required: true,
+      description: "Path to a file containing the comment body.",
+    },
+  },
+  async ({ body }) => {
+    const token = requireToken();
+    const { owner, repo } = repoFromEnv();
+    const pr = prNumberFromEnv();
+    const result = await withApiError(() =>
+      createIssueComment(token, owner, repo, pr, body),
+    );
+    console.log(`Posted comment: ${result.html_url}`);
+  },
+);
+
 const DOWNGRADE_REJECTED_NOTE =
   "\n\n---\n_This review was submitted as a comment instead of an approval " +
   "because GitHub did not allow this token to approve the pull request._";
