@@ -34,6 +34,10 @@ scripts/zizmor-online --persona=pedantic  # zizmor lint for the workflow/action 
 
 The Claude App token — what makes review comments post as `claude[bot]` instead of `github-actions[bot]` — only exists inside `anthropics/claude-code-action`'s own process and only reaches subprocesses that inherit its real environment. A Bash-tool call does; an MCP server does not, because the MCP SDK's `StdioClientTransport` spawns servers with a fixed safe env allowlist that has to be built _before_ `claude-code-action` (and thus the token) exists. So `cli/pr-review` is a plain, dependency-free JS script that `action.yaml` puts on `PATH` for Claude to run directly with Bash — see `cli/README.md` for the full reasoning and citations.
 
+### `action.yaml` style
+
+`run:` steps should begin with a `# Comment` describing what the step does. The GitHub Actions runner log shows only the first line of a `run:` script — not the step's `name:` field — so the first-line comment is what shows up in the log. The comment should match or paraphrase the step name.
+
 ### `action.yaml` flow
 
 1. `pr-review init` creates an exclusive queue directory (`$RUNNER_TEMP/pr-review-queue`). Claude cannot run `pr-review init` itself.
