@@ -243,6 +243,18 @@ runs:
 
         cp .pr-cache/new.patch .pr-cache/prev.patch
 
+    - name: Install gh-pr-render
+      if: steps.diff.outputs.skip != 'true'
+      shell: bash
+      env:
+        RENDER_VERSION: ${{ inputs.gh-pr-render-version }}
+      run: |
+        # Install gh-pr-render so Claude can call it directly
+        set -euo pipefail
+        install_dir=$(mktemp -d)
+        npm install --prefix "$install_dir" "gh-pr-render@${RENDER_VERSION}"
+        echo "${install_dir}/node_modules/.bin" >> "$GITHUB_PATH"
+
     - name: Set up environment and build Claude context
       id: setup
       if: steps.diff.outputs.skip != 'true'
@@ -251,7 +263,6 @@ runs:
         CLI_DIR: ${{ github.action_path }}/cli
         PR_NUMBER: ${{ github.event.pull_request.number }}
         GH_TOKEN: ${{ github.token }}
-        RENDER_VERSION: ${{ inputs.gh-pr-render-version }}
         AVAILABLE_LABELS_PATTERNS: ${{ inputs.available-labels }}
         ALLOWED_TOOLS: |
           ${{ inputs.allowed-tools }}

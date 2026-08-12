@@ -6,10 +6,8 @@
 // $GITHUB_ENV/$GITHUB_PATH for subsequent steps.
 
 import { randomBytes } from "node:crypto";
-import { appendFile, mkdir, mkdtemp } from "node:fs/promises";
+import { appendFile, mkdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { promisify } from "node:util";
 import { fetchAndWriteLabels } from "./lib/labels.js";
 
@@ -38,7 +36,6 @@ async function main() {
   const cliDir = process.env.CLI_DIR;
   const prNumber = process.env.PR_NUMBER;
   const token = process.env.GH_TOKEN;
-  const renderVersion = process.env.RENDER_VERSION;
   const labelsPatterns = process.env.AVAILABLE_LABELS_PATTERNS || "";
   const allowedTools = process.env.ALLOWED_TOOLS || "";
 
@@ -54,15 +51,7 @@ async function main() {
   await mkdir("/tmp/pr-review-scratch", { recursive: true });
 
   // Render the PR discussion into Claude's prompt context.
-  const tempDir = await mkdtemp(join(tmpdir(), "gh-pr-render-"));
-  const { stdout: prContext } = await execFileAsync("npm", [
-    "exec",
-    "--yes",
-    "--prefix",
-    tempDir,
-    `--package=gh-pr-render@${renderVersion}`,
-    "--",
-    "gh-pr-render",
+  const { stdout: prContext } = await execFileAsync("gh-pr-render", [
     process.env.GITHUB_REPOSITORY,
     prNumber,
   ]);
