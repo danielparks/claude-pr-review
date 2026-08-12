@@ -28,6 +28,20 @@ scripts/zizmor-online --persona=pedantic  # zizmor lint for the workflow/action 
 
 `sync-readme` and `generate-workflows` are also pre-commit hooks — if you edit `action.yaml`, `README.md`, or `workflow-*.yaml`, run the relevant script (or `pre-commit run --all-files`) so generated content stays in sync before committing.
 
+## Conventions
+
+### Commit messages
+
+Format commit messages in GitHub-flavored Markdown. If a commit message includes a table, pad its columns so it reads well as plain text too.
+
+### Code comments
+
+Comments should not explain how things have changed — that belongs in the commit message. Only add a comment when the _why_ is non-obvious: a hidden constraint, a subtle invariant, or behavior that would surprise a reader.
+
+### CHANGELOG.md
+
+`CHANGELOG.md` briefly summarizes changes since the last release. All releases are tagged as `vX.Y.Z`; run `git tag -l 'v*'` to see where the last release ended.
+
 ## Architecture
 
 ### Why a Bash-invoked CLI instead of an MCP server
@@ -36,7 +50,7 @@ The Claude App token — what makes review comments post as `claude[bot]` instea
 
 ### `action.yaml` style
 
-`run:` steps should begin with a `# Comment` describing what the step does. The GitHub Actions runner log shows only the first line of a `run:` script — not the step's `name:` field — so the first-line comment is what shows up in the log. The comment should match or paraphrase the step name.
+`run:` steps should begin with a `# Comment` describing what the step does. The GitHub Actions runner log shows only the first line of a `run:` script — not the step's `name:` field — so the first-line comment is what shows up in the log. The comment should match or paraphrase the step name. Omit it when the first line is already self-documenting — usually when the entire `run:` is a single call to another script.
 
 ### `action.yaml` flow
 
