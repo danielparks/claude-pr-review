@@ -56,11 +56,11 @@ The Claude App token — what makes review comments post as `claude[bot]` instea
 
 ### `action.yaml` flow
 
-1. `pr-review init` creates an exclusive queue directory (`$RUNNER_TEMP/pr-review-queue`). Claude cannot run `pr-review init` itself.
-2. Compute the PR diff against the merge base, cache it (`.pr-cache`), and compare to the previous cached diff. If identical (e.g. a rebase with no real changes), skip the rest — no re-review needed. If different, build a diff-of-diffs to show Claude what changed since last review.
-3. Render the full PR discussion via `gh-pr-render` (a separate npm package, fetched at whatever version — this action doesn't vendor it).
-4. Run `anthropics/claude-code-action` with that context, restricted to `allowed-tools` (see `README.md`), including the `pr-review` subcommands.
-5. Always run `pr-review sweep` afterward to post anything Claude queued but didn't finalize itself, retry any abandoned in-flight submission, and downgrade any queued `APPROVE` to `COMMENT` if the Claude step failed or the real `claude[bot]` token wasn't available.
+1. Compute the PR diff against the merge base, cache it (`.pr-cache`), and compare to the previous cached diff. If identical (e.g. a rebase with no real changes), skip the rest — no re-review needed. If different, build a diff-of-diffs to show Claude what changed since last review.
+2. `cli/action-setup` does everything else needed before Claude's turn: `pr-review init` creates the exclusive queue directory (`$RUNNER_TEMP/pr-review-queue`; Claude cannot run `init` itself), `gh-pr-render` renders the full PR discussion (a separate npm package, fetched at whatever version — this action doesn't vendor it), labels matching `available-labels` are fetched so `pr-review`'s label subcommands can enforce the allowlist, and `claude_args` is built — the `--allowedTools` list plus `--mcp-config`/`--permission-prompt-tool` pointing at `cli/pr-review-permission-prompt`, so a tool call outside `allowed-tools` gets a clear denial instead of headless mode's generic one.
+3. Run `anthropics/claude-code-action` with that context, restricted to `allowed-tools` (see `README.md`), including the `pr-review` subcommands.
+4. Always run `pr-review sweep` afterward (skipped along with the rest of the above if the diff check found nothing changed) to post anything Claude queued but didn't finalize itself, retry any abandoned in-flight submission, and downgrade any queued `APPROVE` to `COMMENT` if the Claude step failed or the real `claude[bot]` token wasn't available.
+5. If `thinking-log-artifact-retention` is enabled, extract and redact Claude's internal conversation log (via `claude-code-log`) and upload it as a workflow artifact.
 
 ### `cli/pr-review` queue/claim/sweep design
 
@@ -77,8 +77,12 @@ Queuing a comment only ever creates a new uniquely-named file, and claiming/mark
 ### Key files
 
 - `cli/pr-review` — the CLI entry point / command dispatch.
+- `cli/action-setup` — runs between the diff check and Claude's turn: queue init, `gh-pr-render`, label fetching, and building `claude_args`.
+- `cli/pr-review-permission-prompt` — the MCP server backing `--permission-prompt-tool`; denies anything outside `allowed-tools`, naming the specific command in the denial message.
 - `cli/lib/queue.js` — the claim/retry state machine described above.
 - `cli/lib/github.js` — GitHub REST/GraphQL calls (reviews, replies, thread resolution, review hiding).
 - `cli/lib/redact.js` — strips GitHub token patterns from comment bodies before they're posted, ported from `anthropics/claude-code-action`'s sanitizer, so a token Claude reads from logs can't end up in a public comment.
-- `cli/test/pr-review.test.js` spawns the real `pr-review` script as a subprocess (how Claude's Bash tool actually invokes it); `queue.test.js` and `github.test.js` are unit tests against the lib modules directly.
+- `cli/lib/args.js` — the command line parser shared by every `pr-review` subcommand; also generates its `--help` text from the same option definitions.
+- `cli/lib/labels.js` / `cli/lib/available-labels.js` — fetch repo labels matching `available-labels` and write them to a fixed path outside Claude's write access, so `add-label`/`remove-label` can enforce the allowlist.
+- `cli/test/pr-review.test.js` spawns the real `pr-review` script as a subprocess (how Claude's Bash tool actually invokes it); the other `test/*.test.js` files are unit tests against the lib modules directly.
 - `workflow-review.yaml` / `workflow-response.yaml` — example workflows (PR-triggered review, and `@claude` comment-triggered response) that this repo itself uses; `.github/workflows/` is generated from these by `scripts/generate-workflows`.
