@@ -187,7 +187,6 @@ runs:
         GH_TOKEN: ${{ github.token }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        REPO: ${{ github.repository }}
         REPO_URL: "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
       run: |
         # Get the merge base SHA from the API, then fetch and diff locally.
@@ -196,8 +195,10 @@ runs:
         # Using the merge base (rather than BASE_SHA) ensures we only diff
         # what the PR author changed, excluding commits pushed to the base
         # branch after this branch was created.
-        MERGE_BASE=$(gh api "repos/$REPO/compare/${BASE_SHA}...${HEAD_SHA}" \
-          --jq '.merge_base_commit.sha')
+        MERGE_BASE=$(
+          gh api "repos/$GITHUB_REPOSITORY/compare/${BASE_SHA}...${HEAD_SHA}" \
+            --jq '.merge_base_commit.sha'
+        )
         if [ -z "$MERGE_BASE" ]; then
           echo "::error::Failed to resolve merge base from GitHub API" >&2
           exit 1
@@ -248,7 +249,6 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
-        REPO: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         RENDER_VERSION: ${{ inputs.gh-pr-render-version }}
       run: |
@@ -260,7 +260,7 @@ runs:
         PR_CONTEXT=$(
           npm exec --yes --prefix $(mktemp -d) \
             --package=gh-pr-render@"$RENDER_VERSION" -- \
-            gh-pr-render "$REPO" "$PR_NUMBER"
+            gh-pr-render "$GITHUB_REPOSITORY" "$PR_NUMBER"
         )
         DELIM=$(openssl rand -hex 8)
         {
