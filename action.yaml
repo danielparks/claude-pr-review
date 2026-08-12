@@ -255,14 +255,17 @@ runs:
         # Generate PR context
         set -euo pipefail
 
-        DELIM=$(openssl rand -hex 8)
-        {
-          echo "pr_context<<EOF-${DELIM}"
-          # Don't use local node_modules. Without `--prefix` it fails when
-          # running in the gh-pr-render repo.
+        # Don't use local node_modules. Without `--prefix` it fails when running
+        # in the gh-pr-render repo.
+        PR_CONTEXT=$(
           npm exec --yes --prefix $(mktemp -d) \
             --package=gh-pr-render@"$RENDER_VERSION" -- \
             gh-pr-render "$REPO" "$PR_NUMBER"
+        )
+        DELIM=$(openssl rand -hex 8)
+        {
+          echo "pr_context<<EOF-${DELIM}"
+          echo "$PR_CONTEXT"
           echo "EOF-${DELIM}"
         } >> "$GITHUB_OUTPUT"
 
@@ -319,10 +322,11 @@ runs:
         node "$CLI_DIR/fetch-available-labels"
 
         if [[ -n "$AVAILABLE_LABELS_PATTERNS" ]]; then
+          LABEL_CONTEXT=$(node "$CLI_DIR/pr-review" list-available-labels)
           DELIM=$(openssl rand -hex 8)
           {
             echo "label_context<<EOF-${DELIM}"
-            node "$CLI_DIR/pr-review" list-available-labels
+            echo "$LABEL_CONTEXT"
             echo "EOF-${DELIM}"
           } >> "$GITHUB_OUTPUT"
         fi
