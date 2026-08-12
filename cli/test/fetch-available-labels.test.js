@@ -1,41 +1,43 @@
-// End-to-end smoke test: spawns the actual fetch-available-labels script as
-// a subprocess, exactly how action.yaml invokes it before Claude's turn.
-import { execFile } from "node:child_process";
 import { readFile, rm } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AVAILABLE_LABELS_FILE } from "../lib/available-labels.js";
+import { fetchAndWriteLabels, globToRegExp } from "../lib/labels.js";
 import { withMockGitHub, route, responses } from "./support/mock-github.js";
-
-const execFileAsync = promisify(execFile);
-const CLI_PATH = fileURLToPath(
-  new URL("../fetch-available-labels", import.meta.url),
-);
-
-function run(extraEnv) {
-  return execFileAsync("node", [CLI_PATH], {
-    env: {
-      ...process.env,
-      GH_TOKEN: "test-token",
-      GITHUB_REPOSITORY: "acme/widgets",
-      ...extraEnv,
-    },
-  });
-}
 
 async function readLabelsFile() {
   return JSON.parse(await readFile(AVAILABLE_LABELS_FILE, "utf8"));
 }
 
-describe("fetch-available-labels", () => {
+describe("globToRegExp", () => {
+  it("matches * as any run of characters", () => {
+    const re = globToRegExp("foo*");
+    expect(re.test("foo")).toBe(true);
+    expect(re.test("foobar")).toBe(true);
+    expect(re.test("bar")).toBe(false);
+  });
+
+  it("matches ? as a single character", () => {
+    const re = globToRegExp("ab?cd");
+    expect(re.test("ab cd")).toBe(true);
+    expect(re.test("abcd")).toBe(false);
+    expect(re.test("ab  cd")).toBe(false);
+  });
+
+  it("escapes regex special characters", () => {
+    const re = globToRegExp("a.b");
+    expect(re.test("a.b")).toBe(true);
+    expect(re.test("axb")).toBe(false);
+  });
+});
+
+describe("fetchAndWriteLabels", () => {
   afterEach(async () => {
     await rm(AVAILABLE_LABELS_FILE, { force: true });
   });
 
   it("writes [] without calling the API when no patterns are configured", async () => {
     await withMockGitHub(async ({ requests }) => {
-      await run({ AVAILABLE_LABELS_PATTERNS: "" });
+      await fetchAndWriteLabels("test-token", "acme", "widgets", "");
       expect(await readLabelsFile()).toEqual([]);
       expect(requests).toHaveLength(0);
     });
@@ -51,7 +53,12 @@ describe("fetch-available-labels", () => {
       ]),
 
       async () => {
-        await run({ AVAILABLE_LABELS_PATTERNS: "bug\nenhancement\nother" });
+        await fetchAndWriteLabels(
+          "test-token",
+          "acme",
+          "widgets",
+          "bug\nenhancement\nother",
+        );
         expect(await readLabelsFile()).toEqual([
           { name: "bug", description: "A bug" },
           { name: "enhancement", description: "" },
@@ -74,7 +81,12 @@ describe("fetch-available-labels", () => {
       ]),
 
       async () => {
-        await run({ AVAILABLE_LABELS_PATTERNS: "Claude: *\nabc?xyz" });
+        await fetchAndWriteLabels(
+          "test-token",
+          "acme",
+          "widgets",
+          "Claude: *\nabc?xyz",
+        );
         const labels = await readLabelsFile();
         expect(labels.map((l) => l.name)).toEqual([
           "Claude: reviewed",
@@ -86,17 +98,30 @@ describe("fetch-available-labels", () => {
   });
 
   it("warns on stderr when patterns match nothing", async () => {
-    await withMockGitHub(
-      responses.GET_repo_labels([{ name: "bug" }]),
+    const stderrSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    try {
+      await withMockGitHub(
+        responses.GET_repo_labels([{ name: "bug" }]),
 
-      async () => {
-        const { stderr } = await run({
-          AVAILABLE_LABELS_PATTERNS: "nonexistent",
-        });
-        expect(stderr).toMatch(/::warning::available-labels/);
-        expect(await readLabelsFile()).toEqual([]);
-      },
-    );
+        async () => {
+          await fetchAndWriteLabels(
+            "test-token",
+            "acme",
+            "widgets",
+            "nonexistent",
+          );
+          const output = stderrSpy.mock.calls
+            .map(([msg]) => String(msg))
+            .join("");
+          expect(output).toMatch(/::warning::available-labels/);
+          expect(await readLabelsFile()).toEqual([]);
+        },
+      );
+    } finally {
+      stderrSpy.mockRestore();
+    }
   });
 
   it("paginates through repo labels", async () => {
@@ -113,7 +138,7 @@ describe("fetch-available-labels", () => {
       route("GET", "/labels\\?", { body: page1 }, { body: page2 }),
 
       async () => {
-        await run({ AVAILABLE_LABELS_PATTERNS: "label-*" });
+        await fetchAndWriteLabels("test-token", "acme", "widgets", "label-*");
         const labels = await readLabelsFile();
         expect(labels).toHaveLength(101);
         expect(labels[100].name).toBe("label-100");
