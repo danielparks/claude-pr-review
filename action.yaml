@@ -116,20 +116,22 @@ inputs:
     default:
   available-labels:
     description: >
-      Newline-separated glob patterns (e.g. `Claude: *`) selecting which repo
-      labels Claude is allowed to add or remove with `pr-review add-label` and
-      `pr-review remove-label`. Only labels whose names match at least one
-      pattern are available; Claude cannot add or remove any others.
+      Newline-separated glob patterns, e.g. `Claude: *`, that select which
+      labels Claude is allowed to add or remove from a PR. Only labels whose
+      names match at least one pattern are available; Claude cannot add any
+      others.
 
       Only `*` (any run of characters) and `?` (any single character) are
-      supported -- not full shell glob syntax, so `[abc]` and `{a,b}` are
+      supported instead of full shell glob syntax, so `[abc]` and `{a,b}` are
       matched literally rather than as character classes or alternatives.
 
       When set, fetches matching labels (with descriptions) from the repo and
       injects them into Claude's prompt so it knows what's available.
 
       When blank (the default), label management is disabled: `add-label` and
-      `remove-label` will always fail. Set to `*` to allow all repo labels.
+      `remove-label` will always fail.
+
+      Set to `*` to allow all repo labels.
 
       Examples:
 
@@ -144,6 +146,9 @@ inputs:
             bug
             enhancement
             needs-work
+
+          # Explicitly disable (same as the default, but self-documenting)
+          available-labels: ""
     default:
   gh-pr-render-version:
     description: Version of the `gh-pr-render` tool to use.
@@ -360,11 +365,10 @@ runs:
         node "$CLI_DIR/fetch-available-labels"
 
         if [[ -n "$AVAILABLE_LABELS_PATTERNS" ]]; then
-          LABEL_CONTEXT=$(node "$CLI_DIR/pr-review" list-available-labels)
           DELIM=$(openssl rand -hex 8)
           {
             echo "label_context<<EOF-${DELIM}"
-            echo "$LABEL_CONTEXT"
+            node "$CLI_DIR/pr-review" list-available-labels
             echo "EOF-${DELIM}"
           } >> "$GITHUB_OUTPUT"
         fi

@@ -304,8 +304,8 @@ async function requireAvailableLabel(label) {
   const labels = await readAvailableLabels();
   if (labels.length === 0) {
     fail(
-      "No labels are configured. Set the `available-labels` input in your " +
-        "workflow to enable label management.",
+      "No labels are configured. The `available-labels` input must be " +
+        "configured on the action to enable label management.",
     );
   }
 

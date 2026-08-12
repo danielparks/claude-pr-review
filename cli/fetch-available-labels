@@ -8,10 +8,9 @@
 import { listRepoLabels } from "./lib/github.js";
 import { writeAvailableLabels } from "./lib/available-labels.js";
 
-// Only `*` (any run of characters) and `?` (any single character) are
-// supported -- not full shell glob syntax. No built-in Node API matches an
-// arbitrary string against a glob: path.matchesGlob() requires a newer Node
-// than this project's minimum, and fs.glob() only walks the filesystem.
+// Only `*` (any run of characters) and `?` (any single character) are supported
+// instead of full shell glob syntax. No built-in Node API matches an arbitrary
+// string against a glob; `path.matchesGlob()` treats `/` specially.
 function globToRegExp(pattern) {
   const escaped = pattern
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -20,15 +19,11 @@ function globToRegExp(pattern) {
   return new RegExp(`^${escaped}$`);
 }
 
-function matchesAny(name, patterns) {
-  return patterns.some((pattern) => globToRegExp(pattern).test(name));
-}
-
 async function main() {
   const patterns = (process.env.AVAILABLE_LABELS_PATTERNS || "")
     .split("\n")
-    .map((p) => p.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(globToRegExp);
 
   if (patterns.length === 0) {
     await writeAvailableLabels([]);
@@ -40,11 +35,8 @@ async function main() {
   const all = await listRepoLabels(token, owner, repo);
 
   const matched = all
-    .filter((label) => matchesAny(label.name, patterns))
-    .map((label) => ({
-      name: label.name,
-      description: label.description || "",
-    }));
+    .filter((label) => patterns.some((re) => re.test(label.name)))
+    .map(({ name, description }) => ({ name, description }));
 
   await writeAvailableLabels(matched);
 

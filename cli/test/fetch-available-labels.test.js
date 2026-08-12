@@ -46,14 +46,16 @@ describe("fetch-available-labels", () => {
       responses.GET_repo_labels([
         { name: "bug", description: "A bug" },
         { name: "enhancement", description: "" },
+        { name: "other" },
         { name: "wontfix", description: "Won't fix" },
       ]),
 
       async () => {
-        await run({ AVAILABLE_LABELS_PATTERNS: "bug\nenhancement" });
+        await run({ AVAILABLE_LABELS_PATTERNS: "bug\nenhancement\nother" });
         expect(await readLabelsFile()).toEqual([
           { name: "bug", description: "A bug" },
           { name: "enhancement", description: "" },
+          { name: "other" },
         ]);
       },
     );
@@ -62,17 +64,22 @@ describe("fetch-available-labels", () => {
   it("matches glob patterns", async () => {
     await withMockGitHub(
       responses.GET_repo_labels([
-        { name: "Claude: reviewed", description: "" },
-        { name: "Claude: needs-work", description: "" },
-        { name: "bug", description: "" },
+        { name: "Claude: reviewed" },
+        { name: "Claude: needs-work" },
+        { name: "bug" },
+        { name: "abcxyz" },
+        { name: "abxyz" },
+        { name: "abc xyz" },
+        { name: "abc  xyz" },
       ]),
 
       async () => {
-        await run({ AVAILABLE_LABELS_PATTERNS: "Claude: *" });
+        await run({ AVAILABLE_LABELS_PATTERNS: "Claude: *\nabc?xyz" });
         const labels = await readLabelsFile();
         expect(labels.map((l) => l.name)).toEqual([
           "Claude: reviewed",
           "Claude: needs-work",
+          "abc xyz",
         ]);
       },
     );
@@ -80,7 +87,7 @@ describe("fetch-available-labels", () => {
 
   it("warns on stderr when patterns match nothing", async () => {
     await withMockGitHub(
-      responses.GET_repo_labels([{ name: "bug", description: "" }]),
+      responses.GET_repo_labels([{ name: "bug" }]),
 
       async () => {
         const { stderr } = await run({
@@ -100,7 +107,7 @@ describe("fetch-available-labels", () => {
       name: `label-${i}`,
       description: "",
     }));
-    const page2 = [{ name: "label-100", description: "" }];
+    const page2 = [{ name: "label-100" }];
 
     await withMockGitHub(
       route("GET", "/labels\\?", { body: page1 }, { body: page2 }),

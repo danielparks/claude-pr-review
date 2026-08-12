@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - Updated `allowed-tools` processing to strip `#` comment lines.
 - Added `additional-allowed-tools` input that appends to default allowed tools list.
 - Added `additional-prompt` input that appends to the default prompt.
+- Added `available-labels` input that defines which labels Claude can add or remove (via the `pr-review` tool).
 - Added `thinking-log-artifact-retention` input to trigger saving Claude’s thinking as a CI artifact. See the warning in README.md.
 - Added input to configure [gh-pr-render] version.
 - Added opt-in `pr-review` subcommands, none of which are in the default `allowed-tools` list:

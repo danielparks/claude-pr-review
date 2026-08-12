@@ -129,18 +129,24 @@ This is useful if you just want to add a tool to the default tool list. In parti
 
 ### `available-labels`
 
-Newline-separated shell glob patterns selecting which repo labels Claude is allowed to add or remove with `pr-review add-label` and `pr-review remove-label`. Only labels whose names match at least one pattern are available.
+Newline-separated glob patterns, e.g. `Claude: *`, that select which labels Claude is allowed to add or remove from a PR. Only labels whose names match at least one pattern are available; Claude cannot add any others.
 
-When set, fetches matching labels (with descriptions) from the repo and injects them into Claude's prompt. When blank (the default), label management is disabled: `add-label` and `remove-label` always fail.
+Only `*` (any run of characters) and `?` (any single character) are supported instead of full shell glob syntax, so `[abc]` and `{a,b}` are matched literally rather than as character classes or alternatives.
+
+When set, fetches matching labels (with descriptions) from the repo and injects them into Claude's prompt so it knows what's available.
+
+When blank (the default), label management is disabled: `add-label` and `remove-label` will always fail.
+
+Set to `*` to allow all repo labels.
 
 Examples:
 
 ```yaml
 # Allow all labels
-available-labels: “*”
+available-labels: "*"
 
-# Allow only labels prefixed with “Claude: “
-available-labels: “Claude: *”
+# Allow only labels prefixed with "Claude: "
+available-labels: "Claude: *"
 
 # Allow several specific labels
 available-labels: |
@@ -149,7 +155,7 @@ available-labels: |
   needs-work
 
 # Explicitly disable (same as the default, but self-documenting)
-available-labels: “”
+available-labels: ""
 ```
 
 ### `gh-pr-render-version`

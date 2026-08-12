@@ -298,7 +298,7 @@ describe("formatCommandHelp()", () => {
 
   it("falls back to a generic label when command is omitted", () => {
     expect(formatCommandHelp(undefined, undefined, {})).toBe(
-      "Usage: pr-review <command> [options]",
+      "Usage: pr-review <command>",
     );
   });
 

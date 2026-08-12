@@ -61,16 +61,14 @@ export function formatCommandHelp(command, description, definitions) {
   const options = Array.from(Object.entries(definitions));
 
   // Build positional placeholders for the usage line, sorted by index.
-  const positionalPlaceholders = options
+  const positionalsStr = options
     .filter(([, info]) => info.positional !== undefined)
     .sort(([, a], [, b]) => a.positional - b.positional)
-    .map(([key, { long }]) => (long ?? key).toUpperCase().replace(/-/g, "_"));
-  const positionalStr = positionalPlaceholders.length
-    ? ` ${positionalPlaceholders.join(" ")}`
-    : "";
-
+    .map(([key, info]) => placeholder(info.long ?? key, info))
+    .join("");
+  const optionsStr = options.length ? " [options]" : "";
   const lines = [
-    `Usage: pr-review ${command ?? "<command>"}${positionalStr} [options]`,
+    `Usage: pr-review ${command ?? "<command>"}${positionalsStr}${optionsStr}`,
   ];
   if (description) {
     lines.push("");
