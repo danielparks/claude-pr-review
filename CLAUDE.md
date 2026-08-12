@@ -42,7 +42,7 @@ The Claude App token — what makes review comments post as `claude[bot]` instea
 
 1. `pr-review init` creates an exclusive queue directory (`$RUNNER_TEMP/pr-review-queue`). Claude cannot run `pr-review init` itself.
 2. Compute the PR diff against the merge base, cache it (`.pr-cache`), and compare to the previous cached diff. If identical (e.g. a rebase with no real changes), skip the rest — no re-review needed. If different, build a diff-of-diffs to show Claude what changed since last review.
-3. Render the full PR discussion via `gh-pr-render` (a separate npm package, fetched at whatever version — this action doesn't vendor it).
+3. Run `cli/action-setup`: renders the PR discussion via `gh-pr-render` (a separate npm package, fetched at whatever version — this action doesn't vendor it), builds the allowed-tools list, fetches available labels, and writes the assembled `claude_args` to `$GITHUB_OUTPUT`.
 4. Run `anthropics/claude-code-action` with that context, restricted to `allowed-tools` (see `README.md`), including the `pr-review` subcommands.
 5. Always run `pr-review sweep` afterward to post anything Claude queued but didn't finalize itself, retry any abandoned in-flight submission, and downgrade any queued `APPROVE` to `COMMENT` if the Claude step failed or the real `claude[bot]` token wasn't available.
 
@@ -60,7 +60,9 @@ Queuing a comment only ever creates a new uniquely-named file, and claiming/mark
 
 ### Key files
 
+- `cli/action-setup` — the setup script that runs between the diff check and the Claude step; renders the PR discussion, builds the allowed-tools list, fetches available labels, and writes `claude_args` to `$GITHUB_OUTPUT`. Uses `randomBytes(8)` heredoc delimiters with a sanity check that no line in a value starts with the delimiter.
 - `cli/pr-review` — the CLI entry point / command dispatch.
+- `cli/lib/labels.js` — `globToRegExp` and `fetchAndWriteLabels`; fetches repo labels matching the `available-labels` glob patterns and writes them to `AVAILABLE_LABELS_FILE` before Claude's turn starts.
 - `cli/lib/queue.js` — the claim/retry state machine described above.
 - `cli/lib/github.js` — GitHub REST/GraphQL calls (reviews, replies, thread resolution, review hiding).
 - `cli/lib/redact.js` — strips GitHub token patterns from comment bodies before they're posted, ported from `anthropics/claude-code-action`'s sanitizer, so a token Claude reads from logs can't end up in a public comment.
