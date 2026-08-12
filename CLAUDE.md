@@ -56,11 +56,10 @@ The Claude App token — what makes review comments post as `claude[bot]` instea
 
 ### `action.yaml` flow
 
-1. `pr-review init` creates an exclusive queue directory (`$RUNNER_TEMP/pr-review-queue`). Claude cannot run `pr-review init` itself.
-2. Compute the PR diff against the merge base, cache it (`.pr-cache`), and compare to the previous cached diff. If identical (e.g. a rebase with no real changes), skip the rest — no re-review needed. If different, build a diff-of-diffs to show Claude what changed since last review.
-3. Render the full PR discussion via `gh-pr-render` (a separate npm package, fetched at whatever version — this action doesn't vendor it).
-4. Run `anthropics/claude-code-action` with that context, restricted to `allowed-tools` (see `README.md`), including the `pr-review` subcommands.
-5. Always run `pr-review sweep` afterward to post anything Claude queued but didn't finalize itself, retry any abandoned in-flight submission, and downgrade any queued `APPROVE` to `COMMENT` if the Claude step failed or the real `claude[bot]` token wasn't available.
+1. Compute the PR diff against the merge base, cache it (`.pr-cache`), and compare to the previous cached diff. If identical (e.g. a rebase with no real changes), skip the rest — no re-review needed. If different, build a diff-of-diffs to show Claude what changed since last review.
+2. Set up the review environment: run `pr-review init` to create an exclusive queue directory (`$RUNNER_TEMP/pr-review-queue`) — Claude cannot run this itself — then render the full PR discussion via `gh-pr-render`, build the allowed-tools list, fetch available labels, and assemble `claude_args`.
+3. Run `anthropics/claude-code-action` with that context, restricted to `allowed-tools` (see `README.md`), including the `pr-review` subcommands.
+4. Always run `pr-review sweep` afterward to post anything Claude queued but didn't finalize itself, retry any abandoned in-flight submission, and downgrade any queued `APPROVE` to `COMMENT` if the Claude step failed or the real `claude[bot]` token wasn't available.
 
 ### `cli/pr-review` queue/claim/sweep design
 
