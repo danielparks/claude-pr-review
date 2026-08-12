@@ -103,6 +103,9 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(pr-review comment-review:*)
     Bash(pr-review list-queue:*)
     Bash(pr-review discard-queue:*)
+    Bash(pr-review list-available-labels:*)
+    Bash(pr-review add-label:*)
+    Bash(pr-review remove-label:*)
 
     # From https://code.claude.com/docs/en/agent-sdk/permissions.md:
     #
@@ -122,6 +125,31 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
 List of additional tools to allow Claude to use, one per line. Added to `allowed-tools` and then passed to `--allowedTools`. Empty default.
 
 This is useful if you just want to add a tool to the default tool list. In particular, see the [“Opt-in tools”][opt-in-tools] section of [`cli/README.md`] for `pr-review` subcommands that are deliberately left out of the default list.
+
+### `available-labels`
+
+Newline-separated shell glob patterns selecting which repo labels Claude is allowed to add or remove with `pr-review add-label` and `pr-review remove-label`. Only labels whose names match at least one pattern are available.
+
+When set, fetches matching labels (with descriptions) from the repo and injects them into Claude's prompt. When blank (the default), label management is disabled: `add-label` and `remove-label` always fail.
+
+Examples:
+
+```yaml
+# Allow all labels
+available-labels: “*”
+
+# Allow only labels prefixed with “Claude: “
+available-labels: “Claude: *”
+
+# Allow several specific labels
+available-labels: |
+  bug
+  enhancement
+  needs-work
+
+# Explicitly disable (same as the default, but self-documenting)
+available-labels: “”
+```
 
 ### `gh-pr-render-version`
 
@@ -150,6 +178,7 @@ This action bundles its own CLI tool, [`cli/pr-review`], that `action.yaml` puts
 - `pr-review comment-review` posts everything queued by `queue-inline-comment`, plus an optional top-level body, as a single grouped comment review. Claude doesn’t have to call this itself — `action.yaml` runs it automatically after Claude’s turn ends if anything is still queued.
 - `pr-review reply-inline-comment` replies to an existing inline comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
 - `pr-review list-queue` and `pr-review discard-queue --dir PATH` let Claude recover if a submission fails for a reason that won’t change on retry (e.g. GitHub rejecting an inline comment’s line number): after fixing the problem and resubmitting successfully, Claude can discard the original failed batch so the automatic post-turn sweep doesn’t keep retrying — and failing on — it.
+- `pr-review add-label LABEL` and `pr-review remove-label LABEL` add and remove labels. Only labels matching the [`available-labels`](#available-labels) input are allowed; label management is disabled when that input is blank. `pr-review list-available-labels` shows the available labels and is also used by `action.yaml` to inject label context into Claude’s prompt.
 - `pr-review --help` lists every command; `pr-review <command> --help` shows that command’s flags.
 
 [anthropics/claude-code-action]’s built-in inline-comment tool posts each inline comment through GitHub’s single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.

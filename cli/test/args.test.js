@@ -228,6 +228,35 @@ describe("getOptions()", () => {
       formatCommandHelp("some-command", undefined, definitions),
     );
   });
+
+  it("fills in a positional arg when the flag is omitted", async () => {
+    const [values] = await getOptions(["mybug"], {
+      label: { positional: 0 },
+    });
+    expect(values).toEqual({ label: "mybug" });
+  });
+
+  it("named flag takes precedence over positional when both are provided", async () => {
+    const [values] = await getOptions(["--label", "flag-label", "pos-label"], {
+      label: { positional: 0 },
+    });
+    expect(values).toEqual({ label: "flag-label" });
+  });
+
+  it("applies map to a positional value", async () => {
+    const [values] = await getOptions(["mybug"], {
+      label: { positional: 0, map: (v) => v?.toUpperCase() },
+    });
+    expect(values).toEqual({ label: "MYBUG" });
+  });
+
+  it("map still sees undefined when neither flag nor positional is provided", async () => {
+    await expect(
+      getOptions([], {
+        label: { positional: 0, map: required },
+      }),
+    ).rejects.toThrow("--label is required");
+  });
 });
 
 describe("formatCommandHelp()", () => {
@@ -294,5 +323,29 @@ describe("formatCommandHelp()", () => {
       forceDowngradeApproval: { type: "boolean", long: "downgrade-approval" },
     });
     expect(help.split("\n")).toHaveLength(5);
+  });
+
+  it("includes positional placeholder in the usage line", () => {
+    const help = formatCommandHelp("add-label", "Add a label.", {
+      label: { positional: 0, map: required, description: "Label to add." },
+    });
+    expect(help).toContain("Usage: pr-review add-label LABEL [options]");
+  });
+
+  it("marks the flag as 'or pass as positional argument'", () => {
+    const help = formatCommandHelp("add-label", "Add a label.", {
+      label: { positional: 0, map: required, description: "Label to add." },
+    });
+    expect(help).toContain(
+      "--label LABEL  (required, or pass as positional argument)",
+    );
+  });
+
+  it("orders multiple positionals by index in the usage line", () => {
+    const help = formatCommandHelp("multi", undefined, {
+      b: { positional: 1 },
+      a: { positional: 0 },
+    });
+    expect(help).toContain("Usage: pr-review multi A B [options]");
   });
 });
