@@ -6,10 +6,8 @@
 // $GITHUB_ENV/$GITHUB_PATH for subsequent steps.
 
 import { randomBytes } from "node:crypto";
-import { appendFile, mkdir, mkdtemp } from "node:fs/promises";
+import { appendFile, mkdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { promisify } from "node:util";
 import { fetchAndWriteLabels } from "./lib/labels.js";
 
@@ -35,9 +33,11 @@ async function writeOutput(name, value) {
 }
 
 async function main() {
+  const token = process.env.GH_TOKEN;
+  const ownerRepo = process.env.GITHUB_REPOSITORY || "";
+  const [owner, repo] = ownerRepo.split("/");
   const cliDir = process.env.CLI_DIR;
   const prNumber = process.env.PR_NUMBER;
-  const token = process.env.GH_TOKEN;
   const renderVersion = process.env.RENDER_VERSION;
   const labelsPatterns = process.env.AVAILABLE_LABELS_PATTERNS || "";
   const allowedTools = process.env.ALLOWED_TOOLS || "";
@@ -53,17 +53,14 @@ async function main() {
   await execFileAsync("node", [`${cliDir}/pr-review`, "init"]);
   await mkdir("/tmp/pr-review-scratch", { recursive: true });
 
-  // Render the PR discussion into Claude's prompt context.
-  const tempDir = await mkdtemp(join(tmpdir(), "gh-pr-render-"));
-  const { stdout: prContext } = await execFileAsync("npm", [
-    "exec",
-    "--yes",
-    "--prefix",
-    tempDir,
-    `--package=gh-pr-render@${renderVersion}`,
-    "--",
-    "gh-pr-render",
-    process.env.GITHUB_REPOSITORY,
+  // Install gh-pr-render and save its output for Claude's prompt.
+  await execFileAsync("npm", [
+    "install",
+    "-g",
+    `gh-pr-render@${renderVersion}`,
+  ]);
+  const { stdout: prContext } = await execFileAsync("gh-pr-render", [
+    ownerRepo,
     prNumber,
   ]);
   await writeOutput("pr_context", prContext.trimEnd());
@@ -77,7 +74,6 @@ async function main() {
 
   // Fetch labels matching the operator's configured patterns and write them so
   // pr-review's label subcommands can enforce the allowlist.
-  const [owner, repo] = (process.env.GITHUB_REPOSITORY || "").split("/");
   await fetchAndWriteLabels(token, owner, repo, labelsPatterns);
 
   if (labelsPatterns.trim()) {

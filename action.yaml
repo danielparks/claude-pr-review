@@ -248,9 +248,9 @@ runs:
       if: steps.diff.outputs.skip != 'true'
       shell: bash
       env:
+        GH_TOKEN: ${{ github.token }}
         CLI_DIR: ${{ github.action_path }}/cli
         PR_NUMBER: ${{ github.event.pull_request.number }}
-        GH_TOKEN: ${{ github.token }}
         RENDER_VERSION: ${{ inputs.gh-pr-render-version }}
         AVAILABLE_LABELS_PATTERNS: ${{ inputs.available-labels }}
         ALLOWED_TOOLS: |
