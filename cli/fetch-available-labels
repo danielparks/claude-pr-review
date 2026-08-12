@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+
+// Fetches repo labels matching the `available-labels` glob patterns and
+// writes them to AVAILABLE_LABELS_FILE before Claude's turn starts, so
+// list-available-labels/add-label/remove-label can enforce the operator's
+// allowlist. Run once by action.yaml; Claude never calls this itself.
+
+import { listRepoLabels } from "./lib/github.js";
+import { writeAvailableLabels } from "./lib/available-labels.js";
+
+// Only `*` (any run of characters) and `?` (any single character) are
+// supported -- not full shell glob syntax. No built-in Node API matches an
+// arbitrary string against a glob: path.matchesGlob() requires a newer Node
+// than this project's minimum, and fs.glob() only walks the filesystem.
+function globToRegExp(pattern) {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".");
+  return new RegExp(`^${escaped}$`);
+}
+
+function matchesAny(name, patterns) {
+  return patterns.some((pattern) => globToRegExp(pattern).test(name));
+}
+
+async function main() {
+  const patterns = (process.env.AVAILABLE_LABELS_PATTERNS || "")
+    .split("\n")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (patterns.length === 0) {
+    await writeAvailableLabels([]);
+    return;
+  }
+
+  const token = process.env.GH_TOKEN;
+  const [owner, repo] = (process.env.GITHUB_REPOSITORY || "").split("/");
+  const all = await listRepoLabels(token, owner, repo);
+
+  const matched = all
+    .filter((label) => matchesAny(label.name, patterns))
+    .map((label) => ({
+      name: label.name,
+      description: label.description || "",
+    }));
+
+  await writeAvailableLabels(matched);
+
+  if (matched.length === 0) {
+    process.stderr.write(
+      "::warning::available-labels patterns matched no repo labels. " +
+        "Check your configuration.\n",
+    );
+  }
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -17,6 +17,7 @@ import {
   positiveInt,
   required,
 } from "./lib/args.js";
+import { readAvailableLabels } from "./lib/available-labels.js";
 import { CliError, countLines, fail } from "./lib/util.js";
 import {
   claim,
@@ -272,25 +273,6 @@ COMMANDS.add(
   },
 );
 
-/**
- * Read the available labels file written by action.yaml before Claude's turn.
- *
- * The file lives at $RUNNER_TEMP/pr-review-available-labels.json (not in an
- * env var so Claude can't override the path inline). If the file doesn't exist
- * or RUNNER_TEMP is unset, returns [] (no labels configured).
- */
-async function readAvailableLabels() {
-  const runnerTemp = process.env.RUNNER_TEMP;
-  if (!runnerTemp) return [];
-  const filePath = path.join(runnerTemp, "pr-review-available-labels.json");
-  try {
-    return JSON.parse(await readFile(filePath, "utf8"));
-  } catch (error) {
-    if (error.code === "ENOENT") return [];
-    throw error;
-  }
-}
-
 COMMANDS.add(
   "list-available-labels",
   "List labels available for Claude to add or remove on this PR. Called by " +
@@ -317,6 +299,26 @@ COMMANDS.add(
   },
 );
 
+/** Fail unless `label` is in the operator's `available-labels` allowlist. */
+async function requireAvailableLabel(label) {
+  const labels = await readAvailableLabels();
+  if (labels.length === 0) {
+    fail(
+      "No labels are configured. Set the `available-labels` input in your " +
+        "workflow to enable label management.",
+    );
+  }
+
+  const available = labels.map((l) => l.name);
+  if (!available.includes(label)) {
+    fail(
+      `Label ${JSON.stringify(label)} is not in the available labels list. ` +
+        `Available: ${available.map((n) => JSON.stringify(n)).join(", ")}. ` +
+        "Call `pr-review list-available-labels` to see descriptions.",
+    );
+  }
+}
+
 COMMANDS.add(
   "add-label",
   "Add a label to the pull request. Only labels listed in the " +
@@ -330,22 +332,7 @@ COMMANDS.add(
     },
   },
   async ({ label }) => {
-    const labels = await readAvailableLabels();
-    if (labels.length === 0) {
-      fail(
-        "No labels are configured. Set the `available-labels` input in your " +
-          "workflow to enable label management.",
-      );
-    }
-
-    const available = labels.map((l) => l.name);
-    if (!available.includes(label)) {
-      fail(
-        `Label ${JSON.stringify(label)} is not in the available labels list. ` +
-          `Available: ${available.map((n) => JSON.stringify(n)).join(", ")}. ` +
-          "Call `pr-review list-available-labels` to see descriptions.",
-      );
-    }
+    await requireAvailableLabel(label);
 
     const token = requireToken();
     const { owner, repo } = repoFromEnv();
@@ -369,22 +356,7 @@ COMMANDS.add(
     },
   },
   async ({ label }) => {
-    const labels = await readAvailableLabels();
-    if (labels.length === 0) {
-      fail(
-        "No labels are configured. Set the `available-labels` input in your " +
-          "workflow to enable label management.",
-      );
-    }
-
-    const available = labels.map((l) => l.name);
-    if (!available.includes(label)) {
-      fail(
-        `Label ${JSON.stringify(label)} is not in the available labels list. ` +
-          `Available: ${available.map((n) => JSON.stringify(n)).join(", ")}. ` +
-          "Call `pr-review list-available-labels` to see descriptions.",
-      );
-    }
+    await requireAvailableLabel(label);
 
     const token = requireToken();
     const { owner, repo } = repoFromEnv();

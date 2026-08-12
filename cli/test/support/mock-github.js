@@ -137,6 +137,13 @@ export const responses = {
         html_url: `https://example/issues/comments/${comment_id}`,
       },
     }),
+  GET_repo_labels: (labels) =>
+    route("GET", `/labels\\?`, {
+      body: labels ?? [
+        { name: "bug", description: "A bug" },
+        { name: "enhancement", description: "" },
+      ],
+    }),
   POST_issue_labels: (pr, response) =>
     route(
       "POST",

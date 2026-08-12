@@ -116,10 +116,14 @@ inputs:
     default:
   available-labels:
     description: >
-      Newline-separated shell glob patterns (e.g. `Claude: *`) selecting which
-      repo labels Claude is allowed to add or remove with `pr-review add-label`
-      and `pr-review remove-label`. Only labels whose names match at least one
+      Newline-separated glob patterns (e.g. `Claude: *`) selecting which repo
+      labels Claude is allowed to add or remove with `pr-review add-label` and
+      `pr-review remove-label`. Only labels whose names match at least one
       pattern are available; Claude cannot add or remove any others.
+
+      Only `*` (any run of characters) and `?` (any single character) are
+      supported -- not full shell glob syntax, so `[abc]` and `{a,b}` are
+      matched literally rather than as character classes or alternatives.
 
       When set, fetches matching labels (with descriptions) from the repo and
       injects them into Claude's prompt so it knows what's available.
@@ -349,76 +353,14 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
         AVAILABLE_LABELS_PATTERNS: ${{ inputs.available-labels }}
-        CLI_SCRIPT: ${{ github.action_path }}/cli/pr-review
+        CLI_DIR: ${{ github.action_path }}/cli
       run: |
-        # Fetch and filter repo labels, write to $RUNNER_TEMP/pr-review-available-labels.json
         set -euo pipefail
 
-        node << 'JSEOF'
-        (async () => {
-          const fs = require('fs');
-          const patterns = (process.env.AVAILABLE_LABELS_PATTERNS || '')
-            .split('\n')
-            .map(p => p.trim())
-            .filter(Boolean);
-
-          const labelsFile = `${process.env.RUNNER_TEMP}/pr-review-available-labels.json`;
-
-          if (patterns.length === 0) {
-            fs.writeFileSync(labelsFile, '[]');
-            return;
-          }
-
-          const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
-          const apiBase = process.env.GITHUB_API_URL || 'https://api.github.com';
-          const headers = {
-            Authorization: `Bearer ${process.env.GH_TOKEN}`,
-            Accept: 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-            'User-Agent': 'claude-pr-review',
-          };
-
-          const all = [];
-          const perPage = 100;
-          for (let page = 1; ; page++) {
-            const res = await fetch(
-              `${apiBase}/repos/${owner}/${repo}/labels?per_page=${perPage}&page=${page}`,
-              { headers },
-            );
-            if (!res.ok) {
-              throw new Error(`GitHub API failed: ${res.status} ${res.statusText}`);
-            }
-            const data = await res.json();
-            all.push(...data);
-            if (data.length < perPage) break;
-          }
-
-          function matchesAny(name) {
-            return patterns.some(pattern => {
-              const regex = new RegExp(
-                '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$',
-              );
-              return regex.test(name);
-            });
-          }
-
-          const matched = all
-            .filter(label => matchesAny(label.name))
-            .map(label => ({ name: label.name, description: label.description || '' }));
-
-          fs.writeFileSync(labelsFile, JSON.stringify(matched));
-
-          if (matched.length === 0) {
-            process.stderr.write(
-              '::warning::available-labels patterns matched no repo labels. ' +
-              'Check your configuration.\n',
-            );
-          }
-        })().catch(err => { console.error(err); process.exit(1); });
-        JSEOF
+        node "$CLI_DIR/fetch-available-labels"
 
         if [[ -n "$AVAILABLE_LABELS_PATTERNS" ]]; then
-          LABEL_CONTEXT=$(node "$CLI_SCRIPT" list-available-labels)
+          LABEL_CONTEXT=$(node "$CLI_DIR/pr-review" list-available-labels)
           DELIM=$(openssl rand -hex 8)
           {
             echo "label_context<<EOF-${DELIM}"

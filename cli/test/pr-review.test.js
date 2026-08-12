@@ -17,6 +17,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { AVAILABLE_LABELS_FILE } from "../lib/available-labels.js";
 import {
   withMockGitHub,
   filterByUrlEnd,
@@ -37,6 +38,7 @@ describe("pr-review CLI", () => {
 
   afterEach(async () => {
     await rm(workDir, { recursive: true, force: true });
+    await rm(AVAILABLE_LABELS_FILE, { force: true });
   });
 
   function env(extra) {
@@ -992,16 +994,9 @@ describe("pr-review CLI", () => {
     });
   });
 
-  // Helpers for label tests
+  // Helper for label tests
   async function withLabelsFile(labels) {
-    await writeFile(
-      path.join(workDir, "pr-review-available-labels.json"),
-      JSON.stringify(labels),
-    );
-  }
-
-  function runWithRunnerTemp(args) {
-    return run(args, { RUNNER_TEMP: workDir });
+    await writeFile(AVAILABLE_LABELS_FILE, JSON.stringify(labels));
   }
 
   describe("list-available-labels", () => {
@@ -1010,7 +1005,7 @@ describe("pr-review CLI", () => {
         { name: "bug", description: "Something isn't working" },
         { name: "enhancement", description: "" },
       ]);
-      const { stdout } = await runWithRunnerTemp(["list-available-labels"]);
+      const { stdout } = await run(["list-available-labels"]);
       expect(stdout).toContain("bug: Something isn't working");
       expect(stdout).toContain("- enhancement");
       expect(stdout).toContain("pr-review add-label LABEL");
@@ -1019,12 +1014,12 @@ describe("pr-review CLI", () => {
 
     it("shows no-labels message when file contains empty array", async () => {
       await withLabelsFile([]);
-      const { stdout } = await runWithRunnerTemp(["list-available-labels"]);
+      const { stdout } = await run(["list-available-labels"]);
       expect(stdout).toContain("No labels are available");
     });
 
     it("shows no-labels message when labels file does not exist", async () => {
-      const { stdout } = await runWithRunnerTemp(["list-available-labels"]);
+      const { stdout } = await run(["list-available-labels"]);
       expect(stdout).toContain("No labels are available");
     });
   });
@@ -1036,7 +1031,7 @@ describe("pr-review CLI", () => {
         responses.POST_issue_labels(5),
 
         async ({ requests }) => {
-          const { stdout } = await runWithRunnerTemp(["add-label", "bug"]);
+          const { stdout } = await run(["add-label", "bug"]);
           expect(stdout).toContain("Added label: bug");
           const [req] = filterByUrlEnd(requests, "/issues/5/labels");
           expect(req.body).toEqual({ labels: ["bug"] });
@@ -1050,11 +1045,7 @@ describe("pr-review CLI", () => {
         responses.POST_issue_labels(5),
 
         async () => {
-          const { stdout } = await runWithRunnerTemp([
-            "add-label",
-            "--label",
-            "bug",
-          ]);
+          const { stdout } = await run(["add-label", "--label", "bug"]);
           expect(stdout).toContain("Added label: bug");
         },
       );
@@ -1062,33 +1053,31 @@ describe("pr-review CLI", () => {
 
     it("fails when the label is not in the available list", async () => {
       await withLabelsFile([{ name: "bug", description: "" }]);
-      await expect(
-        runWithRunnerTemp(["add-label", "enhancement"]),
-      ).rejects.toThrow(/not in the available labels list/);
+      await expect(run(["add-label", "enhancement"])).rejects.toThrow(
+        /not in the available labels list/,
+      );
     });
 
     it("fails when no labels are configured (empty file)", async () => {
       await withLabelsFile([]);
-      await expect(runWithRunnerTemp(["add-label", "bug"])).rejects.toThrow(
+      await expect(run(["add-label", "bug"])).rejects.toThrow(
         /No labels are configured/,
       );
     });
 
     it("fails when no labels are configured (no file)", async () => {
-      await expect(runWithRunnerTemp(["add-label", "bug"])).rejects.toThrow(
+      await expect(run(["add-label", "bug"])).rejects.toThrow(
         /No labels are configured/,
       );
     });
 
     it("fails when no label argument is given", async () => {
       await withLabelsFile([{ name: "bug", description: "" }]);
-      await expect(runWithRunnerTemp(["add-label"])).rejects.toThrow(
-        /--label is required/,
-      );
+      await expect(run(["add-label"])).rejects.toThrow(/--label is required/);
     });
 
     it("shows positional usage in --help", async () => {
-      const { stdout } = await runWithRunnerTemp(["add-label", "--help"]);
+      const { stdout } = await run(["add-label", "--help"]);
       expect(stdout).toMatch(/Usage: pr-review add-label LABEL \[options\]/);
       expect(stdout).toMatch(/or pass as positional argument/);
     });
@@ -1101,7 +1090,7 @@ describe("pr-review CLI", () => {
         responses.DELETE_issue_label(5, "bug"),
 
         async () => {
-          const { stdout } = await runWithRunnerTemp(["remove-label", "bug"]);
+          const { stdout } = await run(["remove-label", "bug"]);
           expect(stdout).toContain("Removed label: bug");
         },
       );
@@ -1116,7 +1105,7 @@ describe("pr-review CLI", () => {
         }),
 
         async () => {
-          const { stdout } = await runWithRunnerTemp(["remove-label", "bug"]);
+          const { stdout } = await run(["remove-label", "bug"]);
           expect(stdout).toContain("Label not applied: bug");
         },
       );
@@ -1124,14 +1113,14 @@ describe("pr-review CLI", () => {
 
     it("fails when the label is not in the available list", async () => {
       await withLabelsFile([{ name: "bug", description: "" }]);
-      await expect(
-        runWithRunnerTemp(["remove-label", "enhancement"]),
-      ).rejects.toThrow(/not in the available labels list/);
+      await expect(run(["remove-label", "enhancement"])).rejects.toThrow(
+        /not in the available labels list/,
+      );
     });
 
     it("fails when no labels are configured", async () => {
       await withLabelsFile([]);
-      await expect(runWithRunnerTemp(["remove-label", "bug"])).rejects.toThrow(
+      await expect(run(["remove-label", "bug"])).rejects.toThrow(
         /No labels are configured/,
       );
     });
@@ -1142,7 +1131,7 @@ describe("pr-review CLI", () => {
         responses.DELETE_issue_label(5, "Claude%3A%20reviewed"),
 
         async ({ requests }) => {
-          await runWithRunnerTemp(["remove-label", "Claude: reviewed"]);
+          await run(["remove-label", "Claude: reviewed"]);
           expect(requests[0].url).toContain(
             "/issues/5/labels/Claude%3A%20reviewed",
           );

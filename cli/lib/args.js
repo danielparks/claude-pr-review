@@ -114,9 +114,9 @@ export async function getOptions(args, definitions, command, description) {
     allowPositionals: hasPositionals,
     options: Object.fromEntries(
       Object.entries(definitions).map(
-        ([key, { long, positional: posIdx, ...info }]) => {
+        ([key, { long, positional, ...info }]) => {
           const name = long ?? key;
-          byLong.set(name, { key, positional: posIdx, ...info });
+          byLong.set(name, { key, positional, ...info });
           return [name, { type: "string", ...info }];
         },
       ),
@@ -124,10 +124,7 @@ export async function getOptions(args, definitions, command, description) {
   });
   const newValues = {};
   for (const [long, info] of byLong) {
-    let rawValue = values[long];
-    if (rawValue === undefined && info.positional !== undefined) {
-      rawValue = result.positionals?.[info.positional];
-    }
+    const rawValue = values[long] ?? result.positionals?.[info.positional];
     newValues[info.key] = info.map
       ? await info.map(rawValue, `--${long}`, info)
       : rawValue;

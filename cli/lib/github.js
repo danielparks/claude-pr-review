@@ -242,6 +242,22 @@ export async function createIssueComment(token, owner, repo, pullNumber, body) {
   return { id: data.id, html_url: data.html_url };
 }
 
+/** Lists every label defined on the repo (not just those applied to a PR). */
+export async function listRepoLabels(token, owner, repo) {
+  const perPage = 100;
+  const all = [];
+  for (let page = 1; ; page++) {
+    const data = await request(
+      token,
+      "GET",
+      `/repos/${owner}/${repo}/labels?per_page=${perPage}&page=${page}`,
+    );
+    all.push(...data);
+    if (data.length < perPage) break;
+  }
+  return all;
+}
+
 /** Adds a label to a PR/issue. */
 export async function addLabel(token, owner, repo, issueNumber, label) {
   await request(
