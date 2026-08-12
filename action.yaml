@@ -284,6 +284,9 @@ runs:
         # Scratch space for Claude to stage --body-file content in.
         mkdir -p /tmp/pr-review-scratch
 
+        # Convenience for future steps
+        echo "CLI_DIR=$CLI_DIR" >> "$GITHUB_ENV"
+
     - name: Build allowed-tools list
       id: tools
       if: steps.diff.outputs.skip != 'true'
@@ -310,7 +313,6 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
         AVAILABLE_LABELS_PATTERNS: ${{ inputs.available-labels }}
-        CLI_DIR: ${{ github.action_path }}/cli
       run: |
         set -euo pipefail
 
@@ -331,7 +333,6 @@ runs:
       shell: bash
       env:
         ALLOWED_TOOLS_LIST: ${{ steps.tools.outputs.list }}
-        PERMISSION_PROMPT_SCRIPT: ${{ github.action_path }}/cli/pr-review-permission-prompt
       run: |
         # Build claude_args
         #
@@ -356,7 +357,7 @@ runs:
             mcpServers: {
               "pr-review-permission-prompt": {
                 command: "node",
-                args: [process.env.PERMISSION_PROMPT_SCRIPT],
+                args: [`${process.env.CLI_DIR}/pr-review-permission-prompt`],
               },
             },
           });
@@ -405,7 +406,6 @@ runs:
         # The Claude App token, if the calling workflow granted `id-token:
         # write` and the app is installed.
         GITHUB_TOKEN: ${{ steps.claude.outputs.github_token || github.token }}
-        CLI_SCRIPT: ${{ github.action_path }}/cli/pr-review
         # Downgrade queued APPROVEs when:
         #   - The Claude step didn't succeed
         #   - We did not get the Claude App (claude[bot]) token
@@ -425,7 +425,7 @@ runs:
         if [[ -n "$DOWNGRADE_APPROVAL" ]]; then
           FLAGS+=(--downgrade-approval)
         fi
-        node "$CLI_SCRIPT" sweep "${FLAGS[@]}"
+        node "$CLI_DIR/pr-review" sweep "${FLAGS[@]}"
 
     - name: Parse retention input
       id: retention
