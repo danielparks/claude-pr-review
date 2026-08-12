@@ -137,4 +137,12 @@ export const responses = {
         html_url: `https://example/issues/comments/${comment_id}`,
       },
     }),
+  GET_repo_labels: (labels) =>
+    route("GET", `/labels\\?per_page=100&page=1$`, { body: labels }),
+  POST_issue_labels: (pr, labels) =>
+    route("POST", `/issues/${pr}/labels$`, { body: labels }),
+  DELETE_issue_label: (pr, name) =>
+    route("DELETE", `/issues/${pr}/labels/${encodeURIComponent(name)}$`, {
+      body: [],
+    }),
 };

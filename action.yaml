@@ -67,6 +67,14 @@ inputs:
 
       This is useful if you just want to add text to the default prompt.
     default:
+  available-labels:
+    description: >
+      Newline-separated shell glob patterns (e.g. `Claude: *`) filtering which
+      repo labels are shown to Claude. When set, Claude sees the matching
+      labels with their descriptions and is told to use `pr-review add-label`
+      and `pr-review remove-label` to apply them. When unset, no label context
+      is injected (though the tools remain available by default).
+    default:
   allowed-tools:
     description: >
       List of tools to allow Claude to use, one per line. Lines starting with
@@ -88,6 +96,8 @@ inputs:
       Bash(pr-review comment-review:*)
       Bash(pr-review list-queue:*)
       Bash(pr-review discard-queue:*)
+      Bash(pr-review add-label:*)
+      Bash(pr-review remove-label:*)
 
       # From https://code.claude.com/docs/en/agent-sdk/permissions.md:
       #
@@ -311,6 +321,90 @@ runs:
           echo "EOF-${DELIM}"
         } >> "$GITHUB_OUTPUT"
 
+    - name: Fetch available labels
+      id: labels
+      if: inputs.available-labels != '' && steps.diff.outputs.skip != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        PATTERNS: ${{ inputs.available-labels }}
+      run: |
+        # Fetch repo labels matching available-labels patterns and format for prompt.
+        set -euo pipefail
+
+        DELIM=$(openssl rand -hex 8)
+        {
+          echo "label_context<<EOF-${DELIM}"
+          node << 'JSEOF'
+        async function main() {
+          const token = process.env.GH_TOKEN;
+          const repo = process.env.REPO;
+          const apiUrl = process.env.GITHUB_API_URL || "https://api.github.com";
+          const patterns = process.env.PATTERNS.trim()
+            .split(/\n+/)
+            .filter(Boolean);
+
+          const all = [];
+          for (let page = 1; ; page++) {
+            const res = await fetch(
+              `${apiUrl}/repos/${repo}/labels?per_page=100&page=${page}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  Accept: "application/vnd.github+json",
+                },
+              },
+            );
+            const data = await res.json();
+            all.push(...data);
+            if (data.length < 100) break;
+          }
+
+          function globMatch(pattern, text) {
+            const regex = new RegExp(
+              "^" +
+                pattern
+                  .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+                  .replace(/\*/g, ".*")
+                  .replace(/\?/g, ".") +
+                "$",
+            );
+            return regex.test(text);
+          }
+
+          const matching = all.filter((l) =>
+            patterns.some((p) => globMatch(p, l.name)),
+          );
+
+          if (matching.length === 0) {
+            process.stderr.write(
+              "::warning::available-labels patterns matched no repo labels\n",
+            );
+            return;
+          }
+
+          const lines = [
+            "The following labels are available for this PR:",
+            "",
+            ...matching.map(
+              (l) =>
+                `- ${l.name}${l.description ? ": " + l.description : ""}`,
+            ),
+            "",
+            "Use `pr-review add-label LABEL` to add a label and",
+            "`pr-review remove-label LABEL` to remove a label.",
+          ];
+          console.log(lines.join("\n"));
+        }
+        main().catch((e) => {
+          console.error(e);
+          process.exit(1);
+        });
+        JSEOF
+          echo "EOF-${DELIM}"
+        } >> "$GITHUB_OUTPUT"
+
     - uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e # v1.0.123
       id: claude
       if: steps.diff.outputs.skip != 'true'
@@ -323,6 +417,8 @@ runs:
 
           ${{ inputs.prompt }}
           ${{ inputs.additional-prompt }}
+
+          ${{ steps.labels.outputs.label_context }}
 
           ${{ steps.diff.outputs.diff_section }}
 

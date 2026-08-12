@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  addLabels,
   apiErrorHint,
   createIssueComment,
   createReply,
@@ -10,7 +11,9 @@ import {
   getViewerLogin,
   isApprovalRejected,
   listIssueComments,
+  listRepoLabels,
   minimizeReview,
+  removeLabel,
   resolveReviewThread,
   updateIssueComment,
 } from "../lib/github.js";
@@ -367,5 +370,69 @@ describe("github", () => {
 
   it("isApprovalRejected() is false for a plain Error", () => {
     expect(isApprovalRejected(new Error("nope"))).toBe(false);
+  });
+
+  it("listRepoLabels() fetches all labels and paginates", async () => {
+    await withMockGitHub(
+      route("GET", `/repos/acme/widgets/labels\\?per_page=100&page=1$`, {
+        body: [
+          { name: "bug", description: "Something isn't working" },
+          { name: "enhancement", description: "New feature" },
+        ],
+      }),
+
+      async ({ requests }) => {
+        const labels = await listRepoLabels(...TOKEN_ORG_REPO);
+        expect(labels).toHaveLength(2);
+        expect(labels[0]).toMatchObject({ name: "bug" });
+        expect(labels[1]).toMatchObject({ name: "enhancement" });
+        expect(
+          filterByUrlEnd(requests, "/labels?per_page=100&page=1"),
+        ).toHaveLength(1);
+      },
+    );
+  });
+
+  it("addLabels() posts the labels array", async () => {
+    await withMockGitHub(
+      route("POST", `/repos/acme/widgets/issues/5/labels$`, {
+        body: [{ name: "bug" }],
+      }),
+
+      async ({ requests }) => {
+        await addLabels(...TOKEN_ORG_REPO, 5, ["bug"]);
+        const [req] = filterByUrlEnd(requests, "/issues/5/labels");
+        expect(req.body).toEqual({ labels: ["bug"] });
+      },
+    );
+  });
+
+  it("removeLabel() sends the DELETE request", async () => {
+    await withMockGitHub(
+      route("DELETE", `/repos/acme/widgets/issues/5/labels/bug$`, {
+        body: [],
+      }),
+
+      async ({ requests }) => {
+        await removeLabel(...TOKEN_ORG_REPO, 5, "bug");
+        expect(filterByUrlEnd(requests, "/issues/5/labels/bug")).toHaveLength(
+          1,
+        );
+      },
+    );
+  });
+
+  it("removeLabel() silently returns null on 404", async () => {
+    await withMockGitHub(
+      route("DELETE", `/repos/acme/widgets/issues/5/labels/missing$`, {
+        status: 404,
+        body: { message: "Not Found" },
+      }),
+
+      async () => {
+        const result = await removeLabel(...TOKEN_ORG_REPO, 5, "missing");
+        expect(result).toBeNull();
+      },
+    );
   });
 });

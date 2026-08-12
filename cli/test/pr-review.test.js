@@ -923,6 +923,105 @@ describe("pr-review CLI", () => {
     );
   });
 
+  describe("add-label", () => {
+    const labelRoutes = () => [
+      route("GET", `/repos/acme/widgets/labels\\?per_page=100&page=1$`, {
+        body: [
+          { name: "bug", description: "Something isn't working" },
+          { name: "enhancement", description: "New feature" },
+        ],
+      }),
+      route("POST", `/repos/acme/widgets/issues/5/labels$`, {
+        body: [{ name: "bug" }],
+      }),
+    ];
+
+    it("adds a label by flag", async () => {
+      await withMockGitHub(...labelRoutes(), async () => {
+        const { stdout } = await run(["add-label", "--label", "bug"]);
+        expect(stdout).toMatch(/Added label: bug/);
+      });
+    });
+
+    it("adds a label by positional argument", async () => {
+      await withMockGitHub(...labelRoutes(), async () => {
+        const { stdout } = await run(["add-label", "bug"]);
+        expect(stdout).toMatch(/Added label: bug/);
+      });
+    });
+
+    it("fails loudly if the label does not exist in the repo", async () => {
+      await withMockGitHub(
+        route("GET", `/repos/acme/widgets/labels\\?per_page=100&page=1$`, {
+          body: [{ name: "bug", description: "" }],
+        }),
+        async ({ requests }) => {
+          await expect(run(["add-label", "does-not-exist"])).rejects.toThrow(
+            /does not exist in this repo/,
+          );
+          // Should not have called the POST labels endpoint.
+          expect(requests.filter((r) => r.method === "POST")).toHaveLength(0);
+        },
+      );
+    });
+
+    it("--help shows positional usage", async () => {
+      const { stdout } = await run(["add-label", "--help"]);
+      expect(stdout).toMatch(/Usage: pr-review add-label LABEL \[options\]/);
+      expect(stdout).toMatch(/or pass as positional argument/);
+    });
+  });
+
+  describe("remove-label", () => {
+    it("removes a label by flag", async () => {
+      await withMockGitHub(
+        route("DELETE", `/repos/acme/widgets/issues/5/labels/bug$`, {
+          body: [],
+        }),
+        async () => {
+          const { stdout } = await run(["remove-label", "--label", "bug"]);
+          expect(stdout).toMatch(/Removed label: bug/);
+        },
+      );
+    });
+
+    it("removes a label by positional argument", async () => {
+      await withMockGitHub(
+        route("DELETE", `/repos/acme/widgets/issues/5/labels/bug$`, {
+          body: [],
+        }),
+        async () => {
+          const { stdout } = await run(["remove-label", "bug"]);
+          expect(stdout).toMatch(/Removed label: bug/);
+        },
+      );
+    });
+
+    it("succeeds silently if the label isn't applied (404)", async () => {
+      await withMockGitHub(
+        route("DELETE", `/repos/acme/widgets/issues/5/labels/missing$`, {
+          status: 404,
+          body: { message: "Not Found" },
+        }),
+        async () => {
+          const { stdout } = await run(["remove-label", "missing"]);
+          expect(stdout).toMatch(/Removed label: missing/);
+        },
+      );
+    });
+  });
+
+  it("post-comment posts immediately", async () => {
+    await withMockGitHub(responses.POST_issue_comment(5, 999), async () => {
+      const { stdout } = await run([
+        "post-comment",
+        "--body-file",
+        await bodyFile("standalone comment"),
+      ]);
+      expect(stdout).toMatch(/Posted comment/);
+    });
+  });
+
   it("--help with no command lists every command with a description and exits 0", async () => {
     const { stdout } = await run(["--help"]);
     expect(stdout).toMatch(/Usage: pr-review <command> \[options\]/);

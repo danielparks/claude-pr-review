@@ -94,6 +94,12 @@ It’s also **not** covered by GitHub’s “Allow GitHub Actions to create and 
 
 `APPROVE` specifically has multiple layers of automatic downgrade-to-`COMMENT` built in — see “Why a queue directory” above — because an unearned approval is unsafe (it can vouch for a review that never finished), whereas an unearned block is just recoverable friction. `REQUEST_CHANGES` is deliberately never downgraded for that reason: by default, GitHub blocks the merge button for any pending “Request changes” review from a write-access account, and softening that into a mere comment on a failed or lower-trust run would be trading a fail-safe default for a fail-open one.
 
+### `post-comment --body-file PATH`
+
+Posts a new top-level PR comment immediately. Unlike `update-sticky-comment`, this always creates a new comment — there's no deduplication or marker-based lookup.
+
+**Danger:** every invocation creates a visible comment. Claude could spam the PR if given latitude to call this repeatedly. Opt in if you want Claude to leave standalone commentary that isn't part of a formal review; leave it out if every substantive note should go through `comment-review` or `update-sticky-comment`.
+
 ### `update-sticky-comment --body-file PATH`
 
 Creates or updates a single top-level PR comment that Claude can keep current across a PR's lifetime, e.g. an overall status summary. The comment is identified by a hidden marker embedded in its body (`<!-- pr-review: sticky comment -->`) plus authorship by the authenticated user.

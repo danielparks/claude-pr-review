@@ -194,6 +194,31 @@ describe("getOptions()", () => {
     expect(rest).toHaveProperty("positionals");
   });
 
+  it("fills in a positional value when the flag is omitted", async () => {
+    const [values] = await getOptions(["my-label"], {
+      label: { positional: 0, map: required },
+    });
+    expect(values).toEqual({ label: "my-label" });
+  });
+
+  it("prefers the explicit flag over the positional", async () => {
+    const [values] = await getOptions(
+      ["--label", "from-flag", "from-positional"],
+      {
+        label: { positional: 0, map: required },
+      },
+    );
+    expect(values).toEqual({ label: "from-flag" });
+  });
+
+  it("fails required validation when neither flag nor positional is provided", async () => {
+    await expect(
+      getOptions([], {
+        label: { positional: 0, map: required },
+      }),
+    ).rejects.toThrow("--label is required");
+  });
+
   it("rejects with the error a map function throws", async () => {
     await expect(
       getOptions([], {
@@ -294,5 +319,25 @@ describe("formatCommandHelp()", () => {
       forceDowngradeApproval: { type: "boolean", long: "downgrade-approval" },
     });
     expect(help.split("\n")).toHaveLength(5);
+  });
+
+  it("shows positional args in the usage line and marks flag as optional", () => {
+    const help = formatCommandHelp("add-label", "Add a label.", {
+      label: {
+        positional: 0,
+        map: required,
+        description: "Label name.",
+      },
+    });
+    expect(help).toBe(
+      [
+        "Usage: pr-review add-label LABEL [options]",
+        "",
+        "Add a label.",
+        "",
+        "  --label LABEL  (or pass as positional argument)",
+        "      Label name.",
+      ].join("\n"),
+    );
   });
 });

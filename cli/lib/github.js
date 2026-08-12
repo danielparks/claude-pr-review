@@ -242,6 +242,59 @@ export async function createIssueComment(token, owner, repo, pullNumber, body) {
   return { id: data.id, html_url: data.html_url };
 }
 
+/**
+ * Fetches all labels defined in the repo.
+ *
+ * Pages through the full list; most repos fit in one page but this handles
+ * the rare case where they don't.
+ */
+export async function listRepoLabels(token, owner, repo) {
+  const perPage = 100;
+  const all = [];
+  for (let page = 1; ; page++) {
+    const data = await request(
+      token,
+      "GET",
+      `/repos/${owner}/${repo}/labels?per_page=${perPage}&page=${page}`,
+    );
+    all.push(...data);
+    if (data.length < perPage) break;
+  }
+  return all;
+}
+
+/** Adds one or more labels to an issue/PR. */
+export async function addLabels(token, owner, repo, issueNumber, labels) {
+  return await request(
+    token,
+    "POST",
+    `/repos/${owner}/${repo}/issues/${issueNumber}/labels`,
+    { labels },
+  );
+}
+
+/**
+ * Removes a single label from an issue/PR.
+ *
+ * Returns null silently if the label isn't applied — GitHub returns 404 for
+ * both "label doesn't exist in repo" and "label not applied to this issue",
+ * and in either case we're already done.
+ */
+export async function removeLabel(token, owner, repo, issueNumber, label) {
+  try {
+    return await request(
+      token,
+      "DELETE",
+      `/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
+    );
+  } catch (error) {
+    if (error instanceof GitHubApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 /** Overwrites the body of an existing top-level (issue) comment. */
 export async function updateIssueComment(token, owner, repo, commentId, body) {
   const data = await request(

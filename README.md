@@ -103,6 +103,8 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(pr-review comment-review:*)
     Bash(pr-review list-queue:*)
     Bash(pr-review discard-queue:*)
+    Bash(pr-review add-label:*)
+    Bash(pr-review remove-label:*)
 
     # From https://code.claude.com/docs/en/agent-sdk/permissions.md:
     #
@@ -116,6 +118,17 @@ List of tools to allow Claude to use, one per line. Passed to `--allowedTools`. 
     Bash(gh-pr-render:*)
 
 <!-- /default:allowed-tools -->
+
+### `available-labels`
+
+Newline-separated shell glob patterns (e.g. `Claude: *`) filtering which repo labels are shown to Claude. When set, Claude sees the matching labels and their descriptions, and is told to use `pr-review add-label` and `pr-review remove-label` to apply them. When unset (the default), no label context is injected.
+
+For example, if your repo has labels prefixed with `Claude: `, set:
+
+```yaml
+available-labels: |
+  Claude: *
+```
 
 ### `additional-allowed-tools`
 
@@ -150,6 +163,7 @@ This action bundles its own CLI tool, [`cli/pr-review`], that `action.yaml` puts
 - `pr-review comment-review` posts everything queued by `queue-inline-comment`, plus an optional top-level body, as a single grouped comment review. Claude doesn’t have to call this itself — `action.yaml` runs it automatically after Claude’s turn ends if anything is still queued.
 - `pr-review reply-inline-comment` replies to an existing inline comment thread; this posts immediately, since replies attach to an existing thread rather than a new review.
 - `pr-review list-queue` and `pr-review discard-queue --dir PATH` let Claude recover if a submission fails for a reason that won’t change on retry (e.g. GitHub rejecting an inline comment’s line number): after fixing the problem and resubmitting successfully, Claude can discard the original failed batch so the automatic post-turn sweep doesn’t keep retrying — and failing on — it.
+- `pr-review add-label LABEL` and `pr-review remove-label LABEL` add or remove a single label on the PR. `add-label` fails loudly if the label doesn’t exist in the repo. `remove-label` succeeds silently if the label isn’t applied. See the [`available-labels`](#available-labels) input to inject label context into Claude’s prompt.
 - `pr-review --help` lists every command; `pr-review <command> --help` shows that command’s flags.
 
 [anthropics/claude-code-action]’s built-in inline-comment tool posts each inline comment through GitHub’s single-comment REST endpoint, which creates and submits its own standalone review every time — so a review with five comments shows up as five separate reviews instead of one.
