@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  addLabel,
   apiErrorHint,
   createIssueComment,
   createReply,
@@ -11,6 +12,7 @@ import {
   isApprovalRejected,
   listIssueComments,
   minimizeReview,
+  removeLabel,
   resolveReviewThread,
   updateIssueComment,
 } from "../lib/github.js";
@@ -367,5 +369,60 @@ describe("github", () => {
 
   it("isApprovalRejected() is false for a plain Error", () => {
     expect(isApprovalRejected(new Error("nope"))).toBe(false);
+  });
+
+  it("addLabel() posts labels to the issue endpoint", async () => {
+    await withMockGitHub(
+      responses.POST_issue_labels(5),
+
+      async ({ requests }) => {
+        await addLabel(...TOKEN_ORG_REPO, 5, "bug");
+        const [req] = filterByUrlEnd(requests, "/issues/5/labels");
+        expect(req.method).toBe("POST");
+        expect(req.body).toEqual({ labels: ["bug"] });
+      },
+    );
+  });
+
+  it("removeLabel() sends DELETE to the per-label endpoint and returns true", async () => {
+    await withMockGitHub(
+      responses.DELETE_issue_label(5, "bug"),
+
+      async ({ requests }) => {
+        const result = await removeLabel(...TOKEN_ORG_REPO, 5, "bug");
+        expect(result).toBe(true);
+        expect(requests[0].method).toBe("DELETE");
+        expect(requests[0].url).toMatch(/\/issues\/5\/labels\/bug$/);
+      },
+    );
+  });
+
+  it("removeLabel() returns false on 404 (label not applied)", async () => {
+    await withMockGitHub(
+      responses.DELETE_issue_label(5, "bug", {
+        status: 404,
+        body: { message: "Label does not exist" },
+      }),
+
+      async () => {
+        const result = await removeLabel(...TOKEN_ORG_REPO, 5, "bug");
+        expect(result).toBe(false);
+      },
+    );
+  });
+
+  it("removeLabel() propagates non-404 errors", async () => {
+    await withMockGitHub(
+      responses.DELETE_issue_label(5, "bug", {
+        status: 422,
+        body: { message: "Validation Failed" },
+      }),
+
+      async () => {
+        await expect(removeLabel(...TOKEN_ORG_REPO, 5, "bug")).rejects.toThrow(
+          /422/,
+        );
+      },
+    );
   });
 });

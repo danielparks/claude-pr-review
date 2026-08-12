@@ -32,6 +32,7 @@ import {
   setReview,
 } from "./lib/queue.js";
 import {
+  addLabel,
   apiErrorHint,
   createIssueComment,
   createReply,
@@ -42,6 +43,7 @@ import {
   isApprovalRejected,
   listIssueComments,
   minimizeReview,
+  removeLabel,
   resolveReviewThread,
   updateIssueComment,
   withApiError,
@@ -267,6 +269,134 @@ COMMANDS.add(
       createIssueComment(token, owner, repo, pr, body),
     );
     console.log(`Posted comment: ${result.html_url}`);
+  },
+);
+
+/**
+ * Read the available labels file written by action.yaml before Claude's turn.
+ *
+ * The file lives at $RUNNER_TEMP/pr-review-available-labels.json (not in an
+ * env var so Claude can't override the path inline). If the file doesn't exist
+ * or RUNNER_TEMP is unset, returns [] (no labels configured).
+ */
+async function readAvailableLabels() {
+  const runnerTemp = process.env.RUNNER_TEMP;
+  if (!runnerTemp) return [];
+  const filePath = path.join(runnerTemp, "pr-review-available-labels.json");
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+COMMANDS.add(
+  "list-available-labels",
+  "List labels available for Claude to add or remove on this PR. Called by " +
+    "action.yaml to generate prompt context; Claude may also call it to " +
+    "refresh the list during a review.",
+  {},
+  async () => {
+    const labels = await readAvailableLabels();
+    if (labels.length === 0) {
+      console.log("No labels are available for Claude to add or remove.");
+      return;
+    }
+
+    const lines = ["The following labels are available for this PR:", ""];
+    for (const { name, description } of labels) {
+      lines.push(`- ${name}${description ? `: ${description}` : ""}`);
+    }
+    lines.push(
+      "",
+      "Use `pr-review add-label LABEL` to add a label and",
+      "`pr-review remove-label LABEL` to remove a label.",
+    );
+    console.log(lines.join("\n"));
+  },
+);
+
+COMMANDS.add(
+  "add-label",
+  "Add a label to the pull request. Only labels listed in the " +
+    "`available-labels` action input are allowed.",
+  {
+    label: {
+      positional: 0,
+      map: required,
+      description:
+        "Label to add. Must be one of the labels in `available-labels`.",
+    },
+  },
+  async ({ label }) => {
+    const labels = await readAvailableLabels();
+    if (labels.length === 0) {
+      fail(
+        "No labels are configured. Set the `available-labels` input in your " +
+          "workflow to enable label management.",
+      );
+    }
+
+    const available = labels.map((l) => l.name);
+    if (!available.includes(label)) {
+      fail(
+        `Label ${JSON.stringify(label)} is not in the available labels list. ` +
+          `Available: ${available.map((n) => JSON.stringify(n)).join(", ")}. ` +
+          "Call `pr-review list-available-labels` to see descriptions.",
+      );
+    }
+
+    const token = requireToken();
+    const { owner, repo } = repoFromEnv();
+    const pr = prNumberFromEnv();
+    await withApiError(() => addLabel(token, owner, repo, pr, label));
+    console.log(`Added label: ${label}`);
+  },
+);
+
+COMMANDS.add(
+  "remove-label",
+  "Remove a label from the pull request. Only labels listed in the " +
+    "`available-labels` action input are allowed. Silently succeeds if the " +
+    "label is not currently applied.",
+  {
+    label: {
+      positional: 0,
+      map: required,
+      description:
+        "Label to remove. Must be one of the labels in `available-labels`.",
+    },
+  },
+  async ({ label }) => {
+    const labels = await readAvailableLabels();
+    if (labels.length === 0) {
+      fail(
+        "No labels are configured. Set the `available-labels` input in your " +
+          "workflow to enable label management.",
+      );
+    }
+
+    const available = labels.map((l) => l.name);
+    if (!available.includes(label)) {
+      fail(
+        `Label ${JSON.stringify(label)} is not in the available labels list. ` +
+          `Available: ${available.map((n) => JSON.stringify(n)).join(", ")}. ` +
+          "Call `pr-review list-available-labels` to see descriptions.",
+      );
+    }
+
+    const token = requireToken();
+    const { owner, repo } = repoFromEnv();
+    const pr = prNumberFromEnv();
+    const removed = await withApiError(() =>
+      removeLabel(token, owner, repo, pr, label),
+    );
+    if (removed) {
+      console.log(`Removed label: ${label}`);
+    } else {
+      console.log(`Label not applied: ${label}`);
+    }
   },
 );
 

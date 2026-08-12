@@ -59,7 +59,19 @@ function placeholder(long, info) {
  */
 export function formatCommandHelp(command, description, definitions) {
   const options = Array.from(Object.entries(definitions));
-  const lines = [`Usage: pr-review ${command ?? "<command>"} [options]`];
+
+  // Build positional placeholders for the usage line, sorted by index.
+  const positionalPlaceholders = options
+    .filter(([, info]) => info.positional !== undefined)
+    .sort(([, a], [, b]) => a.positional - b.positional)
+    .map(([key, { long }]) => (long ?? key).toUpperCase().replace(/-/g, "_"));
+  const positionalStr = positionalPlaceholders.length
+    ? ` ${positionalPlaceholders.join(" ")}`
+    : "";
+
+  const lines = [
+    `Usage: pr-review ${command ?? "<command>"}${positionalStr} [options]`,
+  ];
   if (description) {
     lines.push("");
     lines.push(description);
@@ -67,10 +79,11 @@ export function formatCommandHelp(command, description, definitions) {
   if (options.length) {
     lines.push("");
   }
-  for (const [key, { long, description, ...info }] of options) {
+  for (const [key, { long, description, positional, ...info }] of options) {
     const name = long ?? key;
     const notes = [];
     if (isRequired(info)) notes.push("required");
+    if (positional !== undefined) notes.push("or pass as positional argument");
     if (info.default !== undefined) notes.push(`default: ${info.default}`);
     lines.push(
       `  --${name}${placeholder(name, info)}` +
@@ -93,21 +106,31 @@ export async function getOptions(args, definitions, command, description) {
   }
 
   const byLong = new Map();
+  const hasPositionals = Object.values(definitions).some(
+    (info) => info.positional !== undefined,
+  );
   const { values, ...result } = parseArgs({
     args,
+    allowPositionals: hasPositionals,
     options: Object.fromEntries(
-      Object.entries(definitions).map(([key, { long, ...info }]) => {
-        const name = long ?? key;
-        byLong.set(name, { key, ...info }); // Key can be overridden.
-        return [name, { type: "string", ...info }];
-      }),
+      Object.entries(definitions).map(
+        ([key, { long, positional: posIdx, ...info }]) => {
+          const name = long ?? key;
+          byLong.set(name, { key, positional: posIdx, ...info });
+          return [name, { type: "string", ...info }];
+        },
+      ),
     ),
   });
   const newValues = {};
   for (const [long, info] of byLong) {
+    let rawValue = values[long];
+    if (rawValue === undefined && info.positional !== undefined) {
+      rawValue = result.positionals?.[info.positional];
+    }
     newValues[info.key] = info.map
-      ? await info.map(values[long], `--${long}`, info)
-      : values[long];
+      ? await info.map(rawValue, `--${long}`, info)
+      : rawValue;
   }
   return [newValues, result];
 }

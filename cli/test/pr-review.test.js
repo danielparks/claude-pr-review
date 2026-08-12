@@ -991,4 +991,163 @@ describe("pr-review CLI", () => {
       await expect(run(["post-comment"])).rejects.toThrow(/--body-file/);
     });
   });
+
+  // Helpers for label tests
+  async function withLabelsFile(labels) {
+    await writeFile(
+      path.join(workDir, "pr-review-available-labels.json"),
+      JSON.stringify(labels),
+    );
+  }
+
+  function runWithRunnerTemp(args) {
+    return run(args, { RUNNER_TEMP: workDir });
+  }
+
+  describe("list-available-labels", () => {
+    it("shows available labels with descriptions", async () => {
+      await withLabelsFile([
+        { name: "bug", description: "Something isn't working" },
+        { name: "enhancement", description: "" },
+      ]);
+      const { stdout } = await runWithRunnerTemp(["list-available-labels"]);
+      expect(stdout).toContain("bug: Something isn't working");
+      expect(stdout).toContain("- enhancement");
+      expect(stdout).toContain("pr-review add-label LABEL");
+      expect(stdout).toContain("pr-review remove-label LABEL");
+    });
+
+    it("shows no-labels message when file contains empty array", async () => {
+      await withLabelsFile([]);
+      const { stdout } = await runWithRunnerTemp(["list-available-labels"]);
+      expect(stdout).toContain("No labels are available");
+    });
+
+    it("shows no-labels message when labels file does not exist", async () => {
+      const { stdout } = await runWithRunnerTemp(["list-available-labels"]);
+      expect(stdout).toContain("No labels are available");
+    });
+  });
+
+  describe("add-label", () => {
+    it("adds a label by positional argument", async () => {
+      await withLabelsFile([{ name: "bug", description: "" }]);
+      await withMockGitHub(
+        responses.POST_issue_labels(5),
+
+        async ({ requests }) => {
+          const { stdout } = await runWithRunnerTemp(["add-label", "bug"]);
+          expect(stdout).toContain("Added label: bug");
+          const [req] = filterByUrlEnd(requests, "/issues/5/labels");
+          expect(req.body).toEqual({ labels: ["bug"] });
+        },
+      );
+    });
+
+    it("adds a label via --label flag", async () => {
+      await withLabelsFile([{ name: "bug", description: "" }]);
+      await withMockGitHub(
+        responses.POST_issue_labels(5),
+
+        async () => {
+          const { stdout } = await runWithRunnerTemp([
+            "add-label",
+            "--label",
+            "bug",
+          ]);
+          expect(stdout).toContain("Added label: bug");
+        },
+      );
+    });
+
+    it("fails when the label is not in the available list", async () => {
+      await withLabelsFile([{ name: "bug", description: "" }]);
+      await expect(
+        runWithRunnerTemp(["add-label", "enhancement"]),
+      ).rejects.toThrow(/not in the available labels list/);
+    });
+
+    it("fails when no labels are configured (empty file)", async () => {
+      await withLabelsFile([]);
+      await expect(runWithRunnerTemp(["add-label", "bug"])).rejects.toThrow(
+        /No labels are configured/,
+      );
+    });
+
+    it("fails when no labels are configured (no file)", async () => {
+      await expect(runWithRunnerTemp(["add-label", "bug"])).rejects.toThrow(
+        /No labels are configured/,
+      );
+    });
+
+    it("fails when no label argument is given", async () => {
+      await withLabelsFile([{ name: "bug", description: "" }]);
+      await expect(runWithRunnerTemp(["add-label"])).rejects.toThrow(
+        /--label is required/,
+      );
+    });
+
+    it("shows positional usage in --help", async () => {
+      const { stdout } = await runWithRunnerTemp(["add-label", "--help"]);
+      expect(stdout).toMatch(/Usage: pr-review add-label LABEL \[options\]/);
+      expect(stdout).toMatch(/or pass as positional argument/);
+    });
+  });
+
+  describe("remove-label", () => {
+    it("removes a label by positional argument", async () => {
+      await withLabelsFile([{ name: "bug", description: "" }]);
+      await withMockGitHub(
+        responses.DELETE_issue_label(5, "bug"),
+
+        async () => {
+          const { stdout } = await runWithRunnerTemp(["remove-label", "bug"]);
+          expect(stdout).toContain("Removed label: bug");
+        },
+      );
+    });
+
+    it("silently succeeds when label is not currently applied (404)", async () => {
+      await withLabelsFile([{ name: "bug", description: "" }]);
+      await withMockGitHub(
+        responses.DELETE_issue_label(5, "bug", {
+          status: 404,
+          body: { message: "Label does not exist" },
+        }),
+
+        async () => {
+          const { stdout } = await runWithRunnerTemp(["remove-label", "bug"]);
+          expect(stdout).toContain("Label not applied: bug");
+        },
+      );
+    });
+
+    it("fails when the label is not in the available list", async () => {
+      await withLabelsFile([{ name: "bug", description: "" }]);
+      await expect(
+        runWithRunnerTemp(["remove-label", "enhancement"]),
+      ).rejects.toThrow(/not in the available labels list/);
+    });
+
+    it("fails when no labels are configured", async () => {
+      await withLabelsFile([]);
+      await expect(runWithRunnerTemp(["remove-label", "bug"])).rejects.toThrow(
+        /No labels are configured/,
+      );
+    });
+
+    it("handles label names with special URL characters", async () => {
+      await withLabelsFile([{ name: "Claude: reviewed", description: "" }]);
+      await withMockGitHub(
+        responses.DELETE_issue_label(5, "Claude%3A%20reviewed"),
+
+        async ({ requests }) => {
+          await runWithRunnerTemp(["remove-label", "Claude: reviewed"]);
+          expect(requests[0].url).toContain(
+            "/issues/5/labels/Claude%3A%20reviewed",
+          );
+        },
+      );
+    });
+  });
 });
