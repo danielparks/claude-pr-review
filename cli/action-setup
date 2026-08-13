@@ -10,6 +10,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fetchAndWriteLabels } from "./lib/labels.js";
+import { actionContext, fail } from "./lib/util.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -25,7 +26,7 @@ async function writeOutput(name, value) {
   const delim = `EOF-${randomBytes(8).toString("hex")}`;
   const valueStr = String(value);
   if (valueStr.split("\n").some((line) => line === delim)) {
-    throw new Error(
+    fail(
       `Output '${name}' has line matching random delimiter '${delim}'. Retry ` +
         "the workflow.",
     );
@@ -37,11 +38,8 @@ async function writeOutput(name, value) {
 }
 
 async function main() {
-  const token = process.env.GH_TOKEN;
-  const ownerRepo = process.env.GITHUB_REPOSITORY || "";
-  const [owner, repo] = ownerRepo.split("/");
+  const { token, owner, repo, pr } = actionContext();
   const cliDir = process.env.CLI_DIR;
-  const prNumber = process.env.PR_NUMBER;
   const renderVersion = process.env.RENDER_VERSION;
   const labelsPatterns = process.env.AVAILABLE_LABELS_PATTERNS || "";
   const allowedTools = process.env.ALLOWED_TOOLS || "";
@@ -49,7 +47,7 @@ async function main() {
   // Make CLI_DIR and PR_NUMBER available to subsequent steps.
   await appendFile(
     process.env.GITHUB_ENV,
-    `CLI_DIR=${cliDir}\nPR_NUMBER=${prNumber}\n`,
+    `CLI_DIR=${cliDir}\nPR_NUMBER=${pr}\n`,
   );
   await appendFile(process.env.GITHUB_PATH, `${cliDir}\n`);
 
@@ -59,8 +57,10 @@ async function main() {
 
   // Install gh-pr-render and save its output for Claude's prompt.
   await run("npm", "install", "-g", `gh-pr-render@${renderVersion}`);
-  const { stdout: prContext } = await run("gh-pr-render", ownerRepo, prNumber);
-  await writeOutput("pr_context", prContext.trimEnd());
+  await writeOutput(
+    "pr_context",
+    (await run("gh-pr-render", `${owner}/${repo}`, pr)).stdout.trimEnd(),
+  );
 
   // Build the comma-separated allowed-tools list, stripping blank lines and
   // comment lines.
@@ -74,12 +74,12 @@ async function main() {
   await fetchAndWriteLabels(token, owner, repo, labelsPatterns);
 
   if (labelsPatterns.trim()) {
-    const { stdout: labelContext } = await run(
-      "node",
-      `${cliDir}/pr-review`,
-      "list-available-labels",
+    await writeOutput(
+      "label_context",
+      (
+        await run("node", `${cliDir}/pr-review`, "list-available-labels")
+      ).stdout.trimEnd(),
     );
-    await writeOutput("label_context", labelContext.trimEnd());
   }
 
   // Build claude_args for claude-code-action.
