@@ -62,20 +62,24 @@ function requireToken() {
 }
 
 function repoFromEnv() {
-  const repo = process.env.GITHUB_REPOSITORY ?? "";
-  const match = /^([^/]+)\/([^/]+)$/.exec(repo);
+  const ownerRepo = process.env.GITHUB_REPOSITORY ?? "";
+  const match = /^([^/]+)\/([^/]+)$/.exec(ownerRepo);
   if (!match) {
     fail(
       "GITHUB_REPOSITORY environment variable must be in owner/repo form, " +
-        `got: ${JSON.stringify(repo)}`,
+        `got: ${JSON.stringify(ownerRepo)}`,
     );
   }
-  const [, owner, name] = match;
-  return { owner, repo: name };
+  const [, owner, repo] = match;
+  return { owner, repo };
 }
 
-function prNumberFromEnv() {
-  return positiveInt(process.env.PR_NUMBER, "PR_NUMBER environment variable");
+function actionContext() {
+  return {
+    ...repoFromEnv(),
+    token: requireToken(),
+    pr: positiveInt(process.env.PR_NUMBER, "PR_NUMBER environment variable"),
+  };
 }
 
 /** Read a comment body file (pass to map for getOptions). */
@@ -194,11 +198,9 @@ COMMANDS.add(
     },
   },
   async ({ commentId, body }) => {
-    const token = requireToken();
-    const { owner, repo } = repoFromEnv();
-    const pr = prNumberFromEnv();
+    const context = actionContext();
     const result = await withApiError(() =>
-      createReply(token, owner, repo, pr, commentId, body),
+      createReply(context, commentId, body),
     );
     console.log(`Posted reply: ${result.html_url}`);
   },
@@ -220,16 +222,11 @@ COMMANDS.add(
     body: { long: "body-file", map: readBodyFile, required: true },
   },
   async ({ body }) => {
-    const token = requireToken();
-    const { owner, repo } = repoFromEnv();
-    const pr = prNumberFromEnv();
+    const context = actionContext();
     const fullBody = `${STICKY_MARKER}${body}`;
 
     const [viewerLogin, comments] = await withApiError(() =>
-      Promise.all([
-        getViewerLogin(token),
-        listIssueComments(token, owner, repo, pr),
-      ]),
+      Promise.all([getViewerLogin(context.token), listIssueComments(context)]),
     );
     const existing = comments.find(
       (comment) =>
@@ -239,12 +236,12 @@ COMMANDS.add(
 
     if (existing) {
       const result = await withApiError(() =>
-        updateIssueComment(token, owner, repo, existing.id, fullBody),
+        updateIssueComment(context, existing.id, fullBody),
       );
       console.log(`Updated sticky comment: ${result.html_url}`);
     } else {
       const result = await withApiError(() =>
-        createIssueComment(token, owner, repo, pr, fullBody),
+        createIssueComment(context, fullBody),
       );
       console.log(`Created sticky comment: ${result.html_url}`);
     }
@@ -263,12 +260,8 @@ COMMANDS.add(
     },
   },
   async ({ body }) => {
-    const token = requireToken();
-    const { owner, repo } = repoFromEnv();
-    const pr = prNumberFromEnv();
-    const result = await withApiError(() =>
-      createIssueComment(token, owner, repo, pr, body),
-    );
+    const context = actionContext();
+    const result = await withApiError(() => createIssueComment(context, body));
     console.log(`Posted comment: ${result.html_url}`);
   },
 );
@@ -334,10 +327,8 @@ COMMANDS.add(
   async ({ label }) => {
     await requireAvailableLabel(label);
 
-    const token = requireToken();
-    const { owner, repo } = repoFromEnv();
-    const pr = prNumberFromEnv();
-    await withApiError(() => addLabel(token, owner, repo, pr, label));
+    const context = actionContext();
+    await withApiError(() => addLabel(context, label));
     console.log(`Added label: ${label}`);
   },
 );
@@ -358,12 +349,8 @@ COMMANDS.add(
   async ({ label }) => {
     await requireAvailableLabel(label);
 
-    const token = requireToken();
-    const { owner, repo } = repoFromEnv();
-    const pr = prNumberFromEnv();
-    const removed = await withApiError(() =>
-      removeLabel(token, owner, repo, pr, label),
-    );
+    const context = actionContext();
+    const removed = await withApiError(() => removeLabel(context, label));
     if (removed) {
       console.log(`Removed label: ${label}`);
     } else {
@@ -398,9 +385,7 @@ const DOWNGRADE_FORCED_NOTE =
  */
 async function submitClaimedBatch(claimedDir, { forceDowngradeApproval } = {}) {
   const { comments, body, event } = await readBatch(claimedDir);
-  const token = requireToken();
-  const { owner, repo } = repoFromEnv();
-  const pr = prNumberFromEnv();
+  const context = actionContext();
 
   if (
     (event === "COMMENT" || event === "REQUEST_CHANGES") &&
@@ -420,28 +405,12 @@ async function submitClaimedBatch(claimedDir, { forceDowngradeApproval } = {}) {
 
   let result;
   try {
-    result = await createReview(
-      token,
-      owner,
-      repo,
-      pr,
-      comments,
-      finalBody,
-      finalEvent,
-    );
+    result = await createReview(context, comments, finalBody, finalEvent);
   } catch (error) {
     if (finalEvent === "APPROVE" && isApprovalRejected(error)) {
       finalEvent = "COMMENT";
       finalBody = body + DOWNGRADE_REJECTED_NOTE;
-      result = await createReview(
-        token,
-        owner,
-        repo,
-        pr,
-        comments,
-        finalBody,
-        finalEvent,
-      );
+      result = await createReview(context, comments, finalBody, finalEvent);
     } else {
       throw error;
     }
@@ -710,16 +679,12 @@ COMMANDS.add(
  * `checked` guards against Claude hiding someone else's review.
  */
 async function doHideReview({ checked, reviewId }) {
-  const token = requireToken();
-  const { owner, repo } = repoFromEnv();
-  const pr = prNumberFromEnv();
+  const context = actionContext();
 
-  const review = await withApiError(() =>
-    getReview(token, owner, repo, pr, reviewId),
-  );
+  const review = await withApiError(() => getReview(context, reviewId));
 
   if (checked) {
-    const viewerLogin = await withApiError(() => getViewerLogin(token));
+    const viewerLogin = await withApiError(() => getViewerLogin(context.token));
     if (review.user?.login !== viewerLogin) {
       fail(
         `Review ${reviewId} was authored by ` +
@@ -730,7 +695,7 @@ async function doHideReview({ checked, reviewId }) {
     }
   }
 
-  await withApiError(() => minimizeReview(token, review.node_id));
+  await withApiError(() => minimizeReview(context.token, review.node_id));
   console.log(`Hid review ${reviewId} as outdated.`);
 }
 

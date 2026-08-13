@@ -23,7 +23,12 @@ import {
   responses,
 } from "./support/mock-github.js";
 
-const TOKEN_ORG_REPO = ["test", "acme", "widgets"];
+const CONTEXT = {
+  token: "test",
+  owner: "acme",
+  repo: "widgets",
+  pr: 5,
+};
 
 describe("github", () => {
   it("getHeadSha() fetches the PR's head commit sha", async () => {
@@ -31,7 +36,7 @@ describe("github", () => {
       responses.GET_pull(5, "deadbeef"),
 
       async () => {
-        expect(await getHeadSha(...TOKEN_ORG_REPO, 5)).toBe("deadbeef");
+        expect(await getHeadSha(CONTEXT)).toBe("deadbeef");
       },
     );
   });
@@ -45,9 +50,7 @@ describe("github", () => {
         const comments = [
           { path: "a.js", body: "issue", side: "RIGHT", line: 1 },
         ];
-        expect(
-          await createReview(...TOKEN_ORG_REPO, 5, comments, "looks good"),
-        ).toEqual({
+        expect(await createReview(CONTEXT, comments, "looks good")).toEqual({
           id: 111,
           html_url: "https://example/review/111",
         });
@@ -68,7 +71,7 @@ describe("github", () => {
       responses.POST_review(5, 115),
 
       async ({ requests }) => {
-        await createReview(...TOKEN_ORG_REPO, 5, [], "go", "APPROVE");
+        await createReview(CONTEXT, [], "go", "APPROVE");
 
         const [reviewRequest] = filterByUrlEnd(requests, "/reviews");
         expect(reviewRequest.body).toMatchObject({
@@ -119,7 +122,7 @@ describe("github", () => {
       responses.GET_pull_review(5, 111, "review-node-1", "claude[bot]"),
 
       async () => {
-        expect(await getReview(...TOKEN_ORG_REPO, 5, 111)).toEqual({
+        expect(await getReview(CONTEXT, 111)).toEqual({
           node_id: "review-node-1",
           user: { login: "claude[bot]" },
         });
@@ -207,9 +210,7 @@ describe("github", () => {
       responses.POST_pull_comment_reply(5, 999, 222),
 
       async ({ requests }) => {
-        expect(
-          await createReply(...TOKEN_ORG_REPO, 5, 999, "thanks, fixed"),
-        ).toEqual({
+        expect(await createReply(CONTEXT, 999, "thanks, fixed")).toEqual({
           id: 222,
           html_url: "https://example/pulls/5/comments/222",
         });
@@ -226,7 +227,7 @@ describe("github", () => {
       ]),
 
       async () => {
-        expect(await listIssueComments(...TOKEN_ORG_REPO, 5)).toEqual([
+        expect(await listIssueComments(CONTEXT)).toEqual([
           { id: 1, user: { login: "someone" }, body: "hi" },
           { id: 2, user: { login: "claude[bot]" }, body: "bye" },
         ]);
@@ -245,7 +246,7 @@ describe("github", () => {
       route("GET", `/issues/5/comments`, { body: page1 }, { body: page2 }),
 
       async ({ requests }) => {
-        const comments = await listIssueComments(...TOKEN_ORG_REPO, 5);
+        const comments = await listIssueComments(CONTEXT);
         expect(comments).toHaveLength(101);
         expect(comments.at(-1)).toEqual({ id: 100, body: "comment 100" });
 
@@ -262,9 +263,7 @@ describe("github", () => {
       responses.POST_issue_comment(5, 333),
 
       async ({ requests }) => {
-        expect(
-          await createIssueComment(...TOKEN_ORG_REPO, 5, "sticky content"),
-        ).toEqual({
+        expect(await createIssueComment(CONTEXT, "sticky content")).toEqual({
           id: 333,
           html_url: "https://example/issues/5/comments/333",
         });
@@ -280,7 +279,7 @@ describe("github", () => {
 
       async ({ requests }) => {
         expect(
-          await updateIssueComment(...TOKEN_ORG_REPO, 333, "updated content"),
+          await updateIssueComment(CONTEXT, 333, "updated content"),
         ).toEqual({
           id: 333,
           html_url: "https://example/issues/comments/333",
@@ -299,12 +298,12 @@ describe("github", () => {
       }),
 
       async () => {
-        await expect(
-          createReply(...TOKEN_ORG_REPO, 5, 999, "x"),
-        ).rejects.toSatisfy((error) => {
-          expect(apiErrorHint(error)).toMatch(/comment id/);
-          return true;
-        });
+        await expect(createReply(CONTEXT, 999, "x")).rejects.toSatisfy(
+          (error) => {
+            expect(apiErrorHint(error)).toMatch(/comment id/);
+            return true;
+          },
+        );
       },
     );
   });
@@ -334,7 +333,7 @@ describe("github", () => {
 
       async () => {
         await expect(
-          createReview(...TOKEN_ORG_REPO, 5, [], "", "APPROVE"),
+          createReview(CONTEXT, [], "", "APPROVE"),
         ).rejects.toSatisfy((error) => {
           expect(isApprovalRejected(error)).toBe(true);
           expect(apiErrorHint(error)).toMatch(/did not allow this token/);
@@ -356,13 +355,13 @@ describe("github", () => {
       }),
 
       async () => {
-        await expect(
-          createReview(...TOKEN_ORG_REPO, 5, [], "x"),
-        ).rejects.toSatisfy((error) => {
-          expect(isApprovalRejected(error)).toBe(false);
-          expect(apiErrorHint(error)).toMatch(/line number doesn't exist/);
-          return true;
-        });
+        await expect(createReview(CONTEXT, [], "x")).rejects.toSatisfy(
+          (error) => {
+            expect(isApprovalRejected(error)).toBe(false);
+            expect(apiErrorHint(error)).toMatch(/line number doesn't exist/);
+            return true;
+          },
+        );
       },
     );
   });
@@ -376,7 +375,7 @@ describe("github", () => {
       responses.POST_issue_labels(5),
 
       async ({ requests }) => {
-        await addLabel(...TOKEN_ORG_REPO, 5, "bug");
+        await addLabel(CONTEXT, "bug");
         const [req] = filterByUrlEnd(requests, "/issues/5/labels");
         expect(req.method).toBe("POST");
         expect(req.body).toEqual({ labels: ["bug"] });
@@ -389,7 +388,7 @@ describe("github", () => {
       responses.DELETE_issue_label(5, "bug"),
 
       async ({ requests }) => {
-        const result = await removeLabel(...TOKEN_ORG_REPO, 5, "bug");
+        const result = await removeLabel(CONTEXT, "bug");
         expect(result).toBe(true);
         expect(requests[0].method).toBe("DELETE");
         expect(requests[0].url).toMatch(/\/issues\/5\/labels\/bug$/);
@@ -405,7 +404,7 @@ describe("github", () => {
       }),
 
       async () => {
-        const result = await removeLabel(...TOKEN_ORG_REPO, 5, "bug");
+        const result = await removeLabel(CONTEXT, "bug");
         expect(result).toBe(false);
       },
     );
@@ -419,9 +418,7 @@ describe("github", () => {
       }),
 
       async () => {
-        await expect(removeLabel(...TOKEN_ORG_REPO, 5, "bug")).rejects.toThrow(
-          /422/,
-        );
+        await expect(removeLabel(CONTEXT, "bug")).rejects.toThrow(/422/);
       },
     );
   });

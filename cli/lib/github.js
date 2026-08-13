@@ -73,33 +73,26 @@ async function graphqlRequest(token, query, variables) {
   return data.data;
 }
 
-export async function getHeadSha(token, owner, repo, pullNumber) {
+export async function getHeadSha({ token, owner, repo, pr }) {
   const data = await request(
     token,
     "GET",
-    `/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    `/repos/${owner}/${repo}/pulls/${pr}`,
   );
   return data.head.sha;
 }
 
 /** Posts one grouped review (comments + optional top-level body). */
-export async function createReview(
-  token,
-  owner,
-  repo,
-  pullNumber,
-  comments,
-  body,
-  event = "COMMENT",
-) {
-  const commit_id = await getHeadSha(token, owner, repo, pullNumber);
-  const data = await request(
+export async function createReview(context, comments, body, event = "COMMENT") {
+  const { token, owner, repo, pr } = context;
+  const commit_id = await getHeadSha(context);
+  const { id, html_url } = await request(
     token,
     "POST",
-    `/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`,
+    `/repos/${owner}/${repo}/pulls/${pr}/reviews`,
     { commit_id, body, event, comments },
   );
-  return { id: data.id, html_url: data.html_url };
+  return { id, html_url };
 }
 
 /** Resolves an inline-comment thread given its GraphQL node id. */
@@ -153,11 +146,11 @@ export async function getThreadFirstCommentAuthor(token, threadId) {
 }
 
 /** Fetches a single review, given its REST id. */
-export async function getReview(token, owner, repo, pullNumber, reviewId) {
+export async function getReview({ token, owner, repo, pr }, reviewId) {
   return await request(
     token,
     "GET",
-    `/repos/${owner}/${repo}/pulls/${pullNumber}/reviews/${reviewId}`,
+    `/repos/${owner}/${repo}/pulls/${pr}/reviews/${reviewId}`,
   );
 }
 
@@ -191,21 +184,14 @@ export function isApprovalRejected(error) {
   );
 }
 
-export async function createReply(
-  token,
-  owner,
-  repo,
-  pullNumber,
-  commentId,
-  body,
-) {
-  const data = await request(
+export async function createReply({ token, owner, repo, pr }, commentId, body) {
+  const { id, html_url } = await request(
     token,
     "POST",
-    `/repos/${owner}/${repo}/pulls/${pullNumber}/comments/${commentId}/replies`,
+    `/repos/${owner}/${repo}/pulls/${pr}/comments/${commentId}/replies`,
     { body },
   );
-  return { id: data.id, html_url: data.html_url };
+  return { id, html_url };
 }
 
 /**
@@ -216,14 +202,14 @@ export async function createReply(
  * early, since the caller needs to find one comment by marker text and
  * that comment could be old.
  */
-export async function listIssueComments(token, owner, repo, pullNumber) {
+export async function listIssueComments({ token, owner, repo, pr }) {
   const perPage = 100;
   const all = [];
   for (let page = 1; ; page++) {
     const data = await request(
       token,
       "GET",
-      `/repos/${owner}/${repo}/issues/${pullNumber}/comments?per_page=${perPage}&page=${page}`,
+      `/repos/${owner}/${repo}/issues/${pr}/comments?per_page=${perPage}&page=${page}`,
     );
     all.push(...data);
     if (data.length < perPage) break;
@@ -232,18 +218,18 @@ export async function listIssueComments(token, owner, repo, pullNumber) {
 }
 
 /** Posts a new top-level (issue) comment on a PR. */
-export async function createIssueComment(token, owner, repo, pullNumber, body) {
-  const data = await request(
+export async function createIssueComment({ token, owner, repo, pr }, body) {
+  const { id, html_url } = await request(
     token,
     "POST",
-    `/repos/${owner}/${repo}/issues/${pullNumber}/comments`,
+    `/repos/${owner}/${repo}/issues/${pr}/comments`,
     { body },
   );
-  return { id: data.id, html_url: data.html_url };
+  return { id, html_url };
 }
 
 /** Lists every label defined on the repo (not just those applied to a PR). */
-export async function listRepoLabels(token, owner, repo) {
+export async function listRepoLabels({ token, owner, repo }) {
   const perPage = 100;
   const all = [];
   for (let page = 1; ; page++) {
@@ -259,13 +245,10 @@ export async function listRepoLabels(token, owner, repo) {
 }
 
 /** Adds a label to a PR/issue. */
-export async function addLabel(token, owner, repo, issueNumber, label) {
-  await request(
-    token,
-    "POST",
-    `/repos/${owner}/${repo}/issues/${issueNumber}/labels`,
-    { labels: [label] },
-  );
+export async function addLabel({ token, owner, repo, pr }, label) {
+  await request(token, "POST", `/repos/${owner}/${repo}/issues/${pr}/labels`, {
+    labels: [label],
+  });
 }
 
 /**
@@ -274,12 +257,12 @@ export async function addLabel(token, owner, repo, issueNumber, label) {
  * Returns false if the label was not applied (GitHub returns 404 for both
  * "label not applied" and "label doesn't exist in repo").
  */
-export async function removeLabel(token, owner, repo, issueNumber, label) {
+export async function removeLabel({ token, owner, repo, pr }, label) {
   try {
     await request(
       token,
       "DELETE",
-      `/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
+      `/repos/${owner}/${repo}/issues/${pr}/labels/${encodeURIComponent(label)}`,
     );
     return true;
   } catch (error) {
@@ -291,14 +274,18 @@ export async function removeLabel(token, owner, repo, issueNumber, label) {
 }
 
 /** Overwrites the body of an existing top-level (issue) comment. */
-export async function updateIssueComment(token, owner, repo, commentId, body) {
-  const data = await request(
+export async function updateIssueComment(
+  { token, owner, repo },
+  commentId,
+  body,
+) {
+  const { id, html_url } = await request(
     token,
     "PATCH",
     `/repos/${owner}/${repo}/issues/comments/${commentId}`,
     { body },
   );
-  return { id: data.id, html_url: data.html_url };
+  return { id, html_url };
 }
 
 /** A human-readable hint appended to error messages surfaced to Claude. */
