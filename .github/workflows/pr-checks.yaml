@@ -85,6 +85,24 @@ jobs:
 
           tar xzf ghalint_*.tar.gz
           cp ghalint /usr/local/bin
+      - name: Check for FIXME
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          # Check files changed in PR for FIXME and annotate
+          set -euo pipefail
+          found=0
+          while IFS= read -r file; do
+            [[ -f "$file" ]] || continue
+            while IFS=: read -r lineno _; do
+              echo "::error file=${file},line=${lineno}::FIXME found — please resolve before merging"
+              found=1
+            done < <(grep -n "FIXME" "$file" || true)
+          done < <(git diff --name-only "${BASE_SHA}...${HEAD_SHA}")
+          exit $found
+
       - uses: j178/prek-action@bdca6f102f98e2b4c7029491a53dfd366469e33d # v2.0.4
         if: ${{ !cancelled() }}
         with:
