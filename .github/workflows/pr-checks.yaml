@@ -86,7 +86,7 @@ jobs:
           tar xzf ghalint_*.tar.gz
           cp ghalint /usr/local/bin
 
-      - name: Check for ${{ 'FIX' }}ME  # zizmor: ignore[obfuscation]
+      - name: Check for ${{ 'FIX' }}ME # zizmor: ignore[obfuscation]
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -94,6 +94,13 @@ jobs:
         run: |
           # Check files changed in PR for FIX+ME and annotate
           set -euo pipefail
+
+          # The checkout step only fetches HEAD_SHA (fetch-depth: 1), so
+          # BASE_SHA is missing locally until we fetch it explicitly.
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          fi
+
           found=0
           while IFS= read -r file; do
             [[ -f "$file" ]] || continue
