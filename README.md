@@ -203,12 +203,19 @@ If the changes are not identical then this provides Claude with a diff-of-diffs 
 
 ## Alternatives
 
-If you already use, or are considering, [anthropics/claude-code-action] directly for PR review, this action exists to close two specific gaps in it:
+The most obvious alternative is [anthropics/claude-code-action], on which this action is built. This action was created to close a few specific gaps in it:
 
-- Its built-in inline-comment tool posts a separate review per comment instead of one grouped review — an [open, unresolved issue upstream][claude-code-action#1049]. The [`cli/pr-review`] queue/claim/sweep design exists specifically to fix this.
 - It has no built-in way to skip re-review on a no-op push (e.g. a rebase), or to show Claude only what changed since the last review. This action’s diff caching and diff-of-diffs do that.
+- It has no built-in way of providing discussion context to inform re-reviews.
+- Its built-in inline-comment tool posts a separate review per comment instead of one grouped review ([claude-code-action#1049]). The [`cli/pr-review`] queue/claim/sweep design exists specifically to fix this.
 
-If you don’t specifically want Claude, or want something hosted with no GitHub Actions setup at all, there are several proprietary SaaS alternatives — [CodeRabbit], [Greptile], and GitHub’s own Copilot code review among them — that index a whole repo rather than just the diff. [PR-Agent/Qodo Merge][pr-agent] is the closest open-source, self-hosted peer, and supports several LLM providers rather than being Claude-specific. We haven’t used any of these ourselves, so this isn’t a review of them — just enough to place this action in the landscape.
+[PR-Agent/Qodo Merge][pr-agent] is the closest open-source, self-hosted peer, and supports several LLM providers rather than being Claude-specific.
+
+There are several proprietary SaaS alternatives. The big ones are:
+
+- [CodeRabbit]
+- [Greptile]
+- GitHub’s own Copilot code review
 
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
 [pr-review]: #posting-comments-and-reviews
@@ -217,8 +224,8 @@ If you don’t specifically want Claude, or want something hosted with no GitHub
 [anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action
 [`cli/pr-review`]: cli/pr-review
 [opt-in-tools]: cli/README.md#opt-in-tools
+[`cli/README.md`]: cli/README.md
 [claude-code-action#1049]: https://github.com/anthropics/claude-code-action/issues/1049
 [pr-agent]: https://github.com/qodo-ai/pr-agent
 [CodeRabbit]: https://www.coderabbit.ai/
 [Greptile]: https://www.greptile.com/
-[`cli/README.md`]: cli/README.md
