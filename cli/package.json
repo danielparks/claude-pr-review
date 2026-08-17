@@ -2,6 +2,8 @@
   "name": "pr-review-cli",
   "version": "0.1.0",
   "description": "CLI Claude uses (via its Bash tool) to post PR review comments as claude[bot] for danielparks/claude-pr-review",
+  "author": "Daniel Parks <oss-pr-review@demonhorse.org> (https://demon.horse)",
+  "license": "MIT OR Apache-2.0",
   "private": true,
   "type": "module",
   "scripts": {
