@@ -201,6 +201,15 @@ When a PR is updated this compares the version of the PR to the new version. If 
 
 If the changes are not identical then this provides Claude with a diff-of-diffs so that it can see what was changed.
 
+## Alternatives
+
+If you already use, or are considering, [anthropics/claude-code-action] directly for PR review, this action exists to close two specific gaps in it:
+
+- Its built-in inline-comment tool posts a separate review per comment instead of one grouped review — an [open, unresolved issue upstream][claude-code-action#1049]. The [`cli/pr-review`] queue/claim/sweep design exists specifically to fix this.
+- It has no built-in way to skip re-review on a no-op push (e.g. a rebase), or to show Claude only what changed since the last review. This action’s diff caching and diff-of-diffs do that.
+
+If you don’t specifically want Claude, or want something hosted with no GitHub Actions setup at all, there are several proprietary SaaS alternatives — [CodeRabbit], [Greptile], and GitHub’s own Copilot code review among them — that index a whole repo rather than just the diff. [PR-Agent/Qodo Merge][pr-agent] is the closest open-source, self-hosted peer, and supports several LLM providers rather than being Claude-specific. We haven’t used any of these ourselves, so this isn’t a review of them — just enough to place this action in the landscape.
+
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
 [pr-review]: #posting-comments-and-reviews
 [workflow-review.yaml]: workflow-review.yaml
@@ -208,4 +217,8 @@ If the changes are not identical then this provides Claude with a diff-of-diffs 
 [anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action
 [`cli/pr-review`]: cli/pr-review
 [opt-in-tools]: cli/README.md#opt-in-tools
+[claude-code-action#1049]: https://github.com/anthropics/claude-code-action/issues/1049
+[pr-agent]: https://github.com/qodo-ai/pr-agent
+[CodeRabbit]: https://www.coderabbit.ai/
+[Greptile]: https://www.greptile.com/
 [`cli/README.md`]: cli/README.md
