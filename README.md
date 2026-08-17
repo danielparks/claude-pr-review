@@ -1,12 +1,12 @@
-# claude-pr-review action — give Claude context for PR reviews
+# Give Claude context for PR reviews
 
 `claude-pr-review` is a GitHub Action that wraps [anthropics/claude-code-action] with everything it needs to act as a recurring PR reviewer, not just a one-shot summarizer. Add it to a workflow and Claude will:
 
-- **See the whole conversation, not just the diff.** The full PR discussion — every comment and thread, each shown with its nearest diff fragment — is rendered with [gh-pr-render] and given to Claude alongside the diff itself, saved to a file so Claude doesn’t have to spend a tool call fetching it. Claude can see what’s already been said and responds to it instead of repeating it.
+- **See the whole conversation, not just the diff.** The full PR discussion — every comment and thread, each shown with its nearest diff fragment — is rendered with [gh-pr-render] and added to the prompt. Claude can see what’s already been said and responds rather than repeating a nearly identical review.
 - **Re-review only what changed.** On every push, the new diff is compared against what was last reviewed. A rebase with no real code changes triggers nothing; a real change gets Claude a diff-of-diffs showing exactly what’s new, so a re-review addresses the update, not the entire PR again.
-- **Post like a real review, as a real reviewer.** A bundled CLI, [`cli/pr-review`], lets Claude queue inline comments and submit them as a single grouped review — not one review per comment, which is what you get from [anthropics/claude-code-action]’s built-in inline-comment tool — and post as the Claude GitHub App (`claude[bot]`) instead of `github-actions[bot]`.
+- **Post like a real review, as a real reviewer.** A [bundled CLI][pr-review] lets Claude queue inline comments and submit them as a single grouped review — not one review per comment, which is what you get from [anthropics/claude-code-action]’s built-in inline-comment tool.
 - **Fail safe.** If Claude’s turn errors out partway through, a final sweep step still posts whatever was queued, and any pending approval is automatically downgraded to a plain comment rather than going out unearned.
-- **Stay inside the bounds you set.** `allowed-tools` restricts what Claude can do, backed by a permission-prompt server that gives Claude a clear reason when something is denied instead of a generic error; `available-labels` similarly restricts which labels it may add or remove.
+- **Stay inside the bounds you set.** The default configuration restricts what Claude can do while allowing you to pick and choose additional [specialized tooling][opt-in-tools] appropriate to your repo.
 
 This is worth reaching for if you already like using Claude to review PRs but want it to behave like it remembers the thread, rather than re-reading the PR cold on every push.
 
@@ -202,6 +202,7 @@ When a PR is updated this compares the version of the PR to the new version. If 
 If the changes are not identical then this provides Claude with a diff-of-diffs so that it can see what was changed.
 
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
+[pr-review]: #posting-comments-and-reviews
 [workflow-review.yaml]: workflow-review.yaml
 [workflow-response.yaml]: workflow-response.yaml
 [anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action
