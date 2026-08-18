@@ -44,7 +44,7 @@ inputs:
 
       1. Use `pr-review reply-inline-comment --comment-id ID --body-file PATH`
          to reply to existing inline comments if they have been resolved, if
-         changes have been made that haven’t resolved them, or if you have new
+         changes have been made that haven't resolved them, or if you have new
          information. This posts immediately.
       2. Use `pr-review queue-inline-comment --path PATH --line N --body-file
          PATH` for every specific code issue you find in new code. This only
@@ -55,7 +55,7 @@ inputs:
          after you finish. Do not repeat comments made inline, though you may
          briefly list issues that remain unresolved from a previous review.
 
-      If it's useful you may link to specific comments, but don’t refer to them
+      If it's useful you may link to specific comments, but don't refer to them
       by ID — the user does not have easy access to that.
 
       - `#discussion_rID` — an inline comment.
@@ -126,7 +126,7 @@ inputs:
       matched literally rather than as character classes or alternatives.
 
       When set, fetches matching labels (with descriptions) from the repo and
-      injects them into Claude's prompt so it knows what's available.
+      injects them into Claude’s prompt so it knows what’s available.
 
       When blank (the default), label management is disabled: `add-label` and
       `remove-label` will always fail.
@@ -155,7 +155,7 @@ inputs:
     default: 0.5.0
   thinking-log-artifact-retention:
     description: >
-      How long to keep the Claude thinking log artifact in days. "Disabled" or 0
+      How long to keep the Claude thinking log artifact in days. “Disabled” or 0
       means not to create it.
 
       The thinking log is an HTML file that contains some of Claude’s internal

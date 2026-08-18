@@ -57,7 +57,7 @@ the current state of the PR from context. Defaults to:
 
     1. Use `pr-review reply-inline-comment --comment-id ID --body-file PATH`
        to reply to existing inline comments if they have been resolved, if
-       changes have been made that haven’t resolved them, or if you have new
+       changes have been made that haven't resolved them, or if you have new
        information. This posts immediately.
     2. Use `pr-review queue-inline-comment --path PATH --line N --body-file
        PATH` for every specific code issue you find in new code. This only
@@ -68,7 +68,7 @@ the current state of the PR from context. Defaults to:
        after you finish. Do not repeat comments made inline, though you may
        briefly list issues that remain unresolved from a previous review.
 
-    If it's useful you may link to specific comments, but don’t refer to them
+    If it's useful you may link to specific comments, but don't refer to them
     by ID — the user does not have easy access to that.
 
     - `#discussion_rID` — an inline comment.
