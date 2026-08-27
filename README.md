@@ -8,8 +8,6 @@
 - **Fail safe.** If Claude’s turn errors out partway through, a final sweep step still posts whatever was queued, and any pending approval is automatically downgraded to a plain comment rather than going out unearned.
 - **Stay inside the bounds you set.** The default configuration restricts what Claude can do while allowing you to pick and choose additional [specialized tooling][opt-in-tools] appropriate to your repo.
 
-This is worth reaching for if you already like using Claude to review PRs but want it to behave like it remembers the thread, rather than re-reading the PR cold on every push.
-
 ## Quick start
 
 ```yaml
