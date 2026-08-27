@@ -152,7 +152,7 @@ inputs:
     default:
   gh-pr-render-version:
     description: Version of the `gh-pr-render` tool to use.
-    default: 0.5.0
+    default: 0.6.0
   thinking-log-artifact-retention:
     description: >
       How long to keep the Claude thinking log artifact in days. “Disabled” or 0
