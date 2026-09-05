@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
-      - uses: ./
+      - uses: $/.
         with:
           # You can set either of these secrets. If both are set, the API key
           # seems to win.

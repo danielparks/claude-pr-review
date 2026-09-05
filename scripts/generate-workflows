@@ -26,6 +26,7 @@ for EXAMPLE in workflow-*.yaml; do
   {
     echo "# Generated from $EXAMPLE — do not edit directly."
     echo
-    sed "s|uses: ${REPO}@.*|uses: ./|" "$EXAMPLE"
+    # actionlint requires trailing .
+    sed "s|uses: ${REPO}@.*|uses: $/.|" "$EXAMPLE"
   } > "$OUT"
 done
