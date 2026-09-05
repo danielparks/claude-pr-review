@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 10
     env:
       # Update via `scripts/update-pinned-tools`, not by hand.
-      ACTIONLINT_VERSION: v1.7.12
+      ACTIONLINT_VERSION: v1.14.0
       GHALINT_VERSION: v1.5.6
     permissions:
       security-events: write # reporting lint failures
@@ -52,10 +52,10 @@ jobs:
           mkdir actionlint
           cd actionlint
           gh release download "$ACTIONLINT_VERSION" \
-            --repo rhysd/actionlint \
+            --repo kjanat/actionlint \
             --pattern 'actionlint_*_linux_amd64.tar.gz'
           gh attestation verify actionlint_*.tar.gz \
-            --repo rhysd/actionlint
+            --repo kjanat/actionlint
 
           tar xzf actionlint_*.tar.gz
           cp actionlint /usr/local/bin

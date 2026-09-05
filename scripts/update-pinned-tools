@@ -55,5 +55,5 @@ update_version() {
   echo "Updated ${var}: ${current} -> ${latest}"
 }
 
-update_version ACTIONLINT_VERSION rhysd/actionlint
+update_version ACTIONLINT_VERSION kjanat/actionlint
 update_version GHALINT_VERSION suzuki-shunsuke/ghalint
