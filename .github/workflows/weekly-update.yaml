@@ -5,6 +5,7 @@ on:
     - cron: "0 12 * * 5" # Every Friday at 12:00 UTC (5am PDT / 4am PST).
   workflow_dispatch:
 
+# Writes to PRs and workflows are done with secrets.WORKFLOW_UPDATE_TOKEN.
 permissions: {}
 
 concurrency:
@@ -16,21 +17,20 @@ jobs:
     name: update
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: write # Change files
-      pull-requests: write # Create PR
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # zizmor: ignore[artipacked] no archive; needed for git
           persist-credentials: true
+          token: ${{ secrets.WORKFLOW_UPDATE_TOKEN }}
       - uses: suzuki-shunsuke/pinact-action@896d595f299e71d65b9d28349d6956abe144390a # v3.0.0
         with:
           update: true
           skip_push: true
+          github_token: ${{ secrets.WORKFLOW_UPDATE_TOKEN }}
       - name: Update pinned tool versions
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.WORKFLOW_UPDATE_TOKEN }}
         run: scripts/update-pinned-tools
       - name: Open PR if changed
         run: |
@@ -55,4 +55,4 @@ jobs:
               --body 'Automated weekly update.'
           fi
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.WORKFLOW_UPDATE_TOKEN }}
