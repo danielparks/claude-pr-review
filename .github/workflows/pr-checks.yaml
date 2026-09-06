@@ -31,7 +31,7 @@ jobs:
     permissions:
       security-events: write # reporting lint failures
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Cache actionlint
@@ -112,7 +112,7 @@ jobs:
           done < <(git diff --name-only "${BASE_SHA}...${HEAD_SHA}")
           exit $found
 
-      - uses: j178/prek-action@bdca6f102f98e2b4c7029491a53dfd366469e33d # v2.0.4
+      - uses: j178/prek-action@4e14d07f9231acabce116ccfca13b13dd9755ece # v3.0.0
         if: ${{ !cancelled() }}
         with:
           # no-commit-to-branch fails on push to main.
@@ -122,10 +122,10 @@ jobs:
             --skip zizmor
             --skip no-commit-to-branch
 
-      - uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1
+      - uses: crate-ci/typos@8a48f81b6c64dcfea44b3633223084c4be58ac5f # v1.49.0
         if: ${{ !cancelled() }}
 
-      - uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d # v0.5.6
+      - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
         if: ${{ !cancelled() }}
         with:
           inputs: .
