@@ -11,7 +11,7 @@
 ## Quick start
 
 ```yaml
-- uses: danielparks/claude-pr-review@fdca20601bf0d709ee55c3b799c2cdcc9adcccf7 # v1.0.2
+- uses: danielparks/claude-pr-review@cbcfff902feb588f965bf96bd690df8230e2a951 # v2.0.0
   with:
     # You can set either of these secrets. If both are set, the API key
     # seems to win.
