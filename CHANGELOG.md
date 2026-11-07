@@ -2,7 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## main branch
+## Release 2.0.0 (2026-11-07)
+
+Major functional and usability improvements.
 
 ### Breaking changes
 
