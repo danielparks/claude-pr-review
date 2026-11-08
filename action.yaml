@@ -36,6 +36,9 @@ inputs:
       changes. If nothing has changed there is no need to note it unless the
       user seems to think that changes were made.
 
+      If you have not reviewed this PR before, always post a review even if it's
+      just to say that the change looks good.
+
       Only post GitHub comments — don't submit review text as messages.
 
       For the commands below: write the comment body to a file under
