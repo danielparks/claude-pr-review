@@ -1,6 +1,7 @@
-# WARNING: These triggers allow collaborators to ping @claude on third party PRs
-# and issues without any other protection against prompt injection. If you do
-# not trust your collaborators to be extremely careful, then do not use this!
+# WARNING: These triggers allow collaborators (personal repo) or organization
+# members to ping @claude on third party PRs and issues without any other
+# protection against prompt injection. If you do not trust your collaborators to
+# be extremely careful, then do not use this!
 
 # WARNING: This assumes that anybody who can assign issues is trusted.
 
@@ -28,7 +29,7 @@ jobs:
     if: |
       (
         contains(
-          fromJSON('["OWNER", "COLLABORATOR"]'),
+          fromJSON('["OWNER", "COLLABORATOR", "MEMBER"]'),
           github.event.issue.author_association ||
           github.event.comment.author_association ||
           github.event.review.author_association

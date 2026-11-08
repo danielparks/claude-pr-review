@@ -16,7 +16,7 @@ jobs:
     name: Review
     if: |
       contains(
-        fromJSON('["OWNER", "COLLABORATOR"]'),
+        fromJSON('["OWNER", "COLLABORATOR", "MEMBER"]'),
         github.event.pull_request.author_association
       )
     runs-on: ubuntu-latest
