@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bugfixes
 
-- Clarified default prompt to ensure Claude always leaves an initial review.
+- Clarified default prompt to ensure Claude always leaves an initial review, and always follows up when its requests are answered.
 
 ## Release 2.0.0 (2026-11-07)
 

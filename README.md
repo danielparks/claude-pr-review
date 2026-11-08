@@ -47,8 +47,9 @@ the current state of the PR from context. Defaults to:
     changes. If nothing has changed there is no need to note it unless the
     user seems to think that changes were made.
 
-    If you have not reviewed this PR before, always post a review even if it's
-    just to say that the change looks good.
+    If you have not reviewed this PR before, or if your previous review
+    requested changes and those requests were answered, always post a review
+    even if it's just to say that the change looks good.
 
     Only post GitHub comments — don't submit review text as messages.
 
