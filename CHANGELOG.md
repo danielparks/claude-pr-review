@@ -4,9 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## main branch
 
-### Bugfixes
+### Example security
 
 - Fixed the example response workflow's trust check looking at the author of the issue or PR instead of the commenter on `issue_comment` events. Anyone could trigger Claude by commenting `@claude` on a trusted user's issue or PR, while trusted users could not on third-party ones.
+
+### Bugfixes
+
 - Fixed the fallback `sweep` step failing because the Claude App token was revoked when the Claude step finished. Queued comments are now posted by a `Stop` hook while the token is still valid, and the fallback step uses the workflow token (so it posts as `github-actions[bot]`) and always downgrades approvals to comments.
 - Clarified default prompt to ensure Claude always leaves an initial review, and always follows up when its requests are answered.
 
