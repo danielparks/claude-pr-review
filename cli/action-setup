@@ -95,9 +95,30 @@ async function main() {
     },
   });
 
+  // The app token that makes comments post as claude[bot] is revoked when the
+  // Claude step finishes, so queued comments have to be swept from inside
+  // Claude's process (hooks inherit its environment, like Bash calls do).
+  // `action.yaml`'s later sweep step is only a fallback using a weaker token.
+  const settings = JSON.stringify({
+    hooks: {
+      Stop: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: `node ${shQuote(`${cliDir}/pr-review`)} sweep --downgrade-approval`,
+            },
+          ],
+        },
+      ],
+    },
+  });
+
   await writeOutput(
     "value",
     [
+      "--settings",
+      shQuote(settings),
       "--allowedTools",
       shQuote(toolsList),
       "--mcp-config",
