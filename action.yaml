@@ -312,6 +312,22 @@ runs:
         fi
         node "$CLI_DIR/pr-review" sweep "${FLAGS[@]}"
 
+    - name: Probe tokens (temporary)
+      if: always()
+      shell: bash
+      env:
+        APP_TOKEN: ${{ steps.claude.outputs.github_token }}
+        WORKFLOW_TOKEN: ${{ github.token }}
+      run: |
+        # Probe whether tokens can write contents.
+        for name in APP_TOKEN WORKFLOW_TOKEN; do
+          printf '%s: ' "$name"
+          GH_TOKEN="${!name}" gh api -i -X POST \
+            "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref=bad -f sha=0000000000000000000000000000000000000000 \
+            2>&1 | head -1 || true
+        done
+
     - name: Parse retention input
       id: retention
       if: always() && steps.setup.outcome == 'success'
