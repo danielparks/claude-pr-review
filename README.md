@@ -5,8 +5,8 @@
 - **See the whole conversation, not just the diff.** The full PR discussion — every comment and thread, each shown with its nearest diff fragment — is rendered with [gh-pr-render] and added to the prompt. Claude can see what’s already been said and responds rather than repeating a nearly identical review.
 - **Re-review only what changed.** On every push, the new diff is compared against what was last reviewed. A rebase with no real code changes triggers nothing; a real change gets Claude a diff-of-diffs showing exactly what’s new, so a re-review addresses the update, not the entire PR again.
 - **Post like a real review, as a real reviewer.** A [bundled CLI][pr-review] lets Claude queue inline comments and submit them as a single grouped review — not one review per comment, which is what you get from [anthropics/claude-code-action]’s built-in inline-comment tool.
-- **Fail safe.** If Claude’s turn errors out partway through, a final sweep step still posts whatever was queued, and any pending approval is automatically downgraded to a plain comment rather than going out unearned.
-- **Stay inside the bounds you set.** The default configuration restricts what Claude can do while allowing you to pick and choose additional [specialized tooling][opt-in-tools] appropriate to your repo.
+- **Fail safe.** If Claude’s turn ends or errors out partway through, whatever was queued is still posted (as `claude[bot]` when possible, otherwise by a final fallback step as `github-actions[bot]`), and any pending approval is automatically downgraded to a plain comment rather than going out unearned.
+- **Stay inside the bounds you set.** The default configuration restricts what Claude can do while allowing you to pick and choose additional [specialized tooling][opt-in-tools] appropriate to your repo. See [PERMISSIONS.md] for what Claude can and can’t do, and what the app token implies.
 
 ## Quick start
 
@@ -235,6 +235,7 @@ Unless you explicitly state otherwise, any contribution you submit as defined
 in the Apache 2.0 license shall be dual licensed as above, without any
 additional terms or conditions.
 
+[PERMISSIONS.md]: PERMISSIONS.md
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
 [pr-review]: #posting-comments-and-reviews
 [workflow-review.yaml]: workflow-review.yaml

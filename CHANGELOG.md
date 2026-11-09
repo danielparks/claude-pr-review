@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bugfixes
 
+- Fixed the fallback `sweep` step failing with a 401: the Claude App token is revoked when the Claude step finishes. Queued comments are now posted by a `Stop` hook while the token is still valid, and the fallback step uses the workflow token (so it posts as `github-actions[bot]` and always downgrades approvals).
 - Clarified default prompt to ensure Claude always leaves an initial review, and always follows up when its requests are answered.
 
 ## Release 2.0.0 (2026-11-07)

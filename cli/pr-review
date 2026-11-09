@@ -701,17 +701,17 @@ COMMANDS.add(
 );
 
 /**
- * Invoked by the deferred fallback step after Claude's run ends, not by
- * Claude itself. Idempotent no matter how many times it runs or what state
- * it finds: posts anything Claude queued but never submitted, retries any
- * abandoned in-flight attempt from a crashed comment-review, and leaves
- * already-posted batches alone.
+ * Invoked automatically, not by Claude itself: by a Stop hook when Claude's
+ * turn ends (while the Claude App token is still valid), and again by a
+ * fallback step in `action.yaml` using the workflow token. Idempotent no
+ * matter how many times it runs or what state it finds: posts anything Claude
+ * queued but never submitted, retries any abandoned in-flight attempt from a
+ * crashed comment-review, and leaves already-posted batches alone.
  *
  * `--downgrade-approval` proactively turns any queued APPROVE into a
- * COMMENT -- `action.yaml` passes this when the Claude step didn't
- * succeed, or when it's using the plain `github.token` fallback instead of
- * the Claude App token, since neither circumstance should get to submit an
- * approval sweep never actually watched happen live.
+ * COMMENT -- `action.yaml` always passes this, since sweep never actually
+ * watched an approval happen live and the fallback step can't use the app
+ * token anyway.
  */
 COMMANDS.add(
   "sweep",

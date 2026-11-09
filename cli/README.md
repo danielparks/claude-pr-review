@@ -42,7 +42,7 @@ Comments are queued as one file per comment (`$RUNNER_TEMP/pr-review-queue/comme
 3. Post it as one grouped review.
 4. Rename the batch directory again to `comments.posted-<timestamp>-<pid>-<uuid>/` if it got a successful response.
 
-Three states are encoded in the directory name, so a completely separate process — the deferred `sweep` step `action.yaml` runs after Claude’s turn ends — can always tell what happened without reading any file content:
+Three states are encoded in the directory name, so a completely separate process — `sweep`, which runs from a `Stop` hook when Claude’s turn ends and again as a fallback step in `action.yaml` — can always tell what happened without reading any file content:
 
 - `comments/` still exists → Claude queued things but never finalized; sweep claims and posts it as a `COMMENT`. This is what lets Claude skip calling `comment-review` at all when it has nothing to add beyond the inline comments.
 - `comments.claimed-*/` exists → a finalizing call claimed a batch and then crashed before confirming success; sweep retries it with the same event it was originally going to submit.
@@ -52,7 +52,7 @@ The one gap this doesn’t close: if the crash happens during the network reques
 
 `action.yaml` runs `pr-review init` before Claude’s own turn starts, which exclusively creates the queue root (failing if it already exists) so nothing that ran earlier in the same job could have pre-seeded a review decision in it. That’s not a complete defense — something already running in the job (e.g. a long-lived process watching for the directory to appear) could still modify it after this point — but it closes off the cheapest version of that: dropping a file in ahead of time.
 
-An `APPROVE` review gets special handling because it might allow a merge. If the Claude step failed, or we didn’t get the Claude app token, then `--downgrade-approval` is passed to `sweep`, which converts any queued `APPROVE` into a `COMMENT` with a note appended to the body explaining why before submitting.
+An `APPROVE` review gets special handling because it might allow a merge. `sweep` is always run with `--downgrade-approval`, which converts any queued `APPROVE` into a `COMMENT` with a note appended to the body explaining why before submitting: it never watched the approval happen live, and the fallback step can only use the workflow token.
 
 Separately, any `APPROVE` review GitHub itself rejects because the token isn’t permitted to approve is automatically retried as a `COMMENT`, again with a note. `REQUEST_CHANGES` never gets downgraded by either mechanism — see the danger note below for why.
 

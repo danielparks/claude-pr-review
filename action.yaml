@@ -285,32 +285,20 @@ runs:
     - name: Submit any review comments Claude queued but didn't post
       # Runs even if the step above failed or Claude never called
       # `comment-review` itself (it's a no-op when nothing was ever queued).
+      #
+      # This deliberately uses the workflow's token, not the Claude App token:
+      # the app token is revoked as soon as the Claude step finishes. A Stop
+      # hook (see `cli/action-setup`) already sweeps while the app token is
+      # still valid, so this only catches what that missed, e.g. if Claude
+      # crashed. Reviews it posts come from `github-actions[bot]`, which can't
+      # be trusted to approve, so approvals are always downgraded.
       if: always() && steps.setup.outcome == 'success'
       shell: bash
       env:
-        # The Claude App token, if the calling workflow granted `id-token:
-        # write` and the app is installed.
-        GITHUB_TOKEN: ${{ steps.claude.outputs.github_token || github.token }}
-        # Downgrade queued APPROVEs when:
-        #   - The Claude step didn't succeed
-        #   - We did not get the Claude App (claude[bot]) token
-        DOWNGRADE_APPROVAL: >-
-          ${{
-            (
-              steps.claude.outputs.github_token == ''
-              || steps.claude.outcome != 'success'
-            )
-            && 'true'
-            || ''
-          }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         # Submit any review comments Claude queued but didn't post
-        set -euo pipefail
-        FLAGS=()
-        if [[ -n "$DOWNGRADE_APPROVAL" ]]; then
-          FLAGS+=(--downgrade-approval)
-        fi
-        node "$CLI_DIR/pr-review" sweep "${FLAGS[@]}"
+        node "$CLI_DIR/pr-review" sweep --downgrade-approval
 
     - name: Parse retention input
       id: retention
