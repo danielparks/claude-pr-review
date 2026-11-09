@@ -10,6 +10,7 @@
 name: Claude Response
 on:
   issues:
+    # WARNING: this trusts anybody who can edit an issue made by a trusted user.
     types: [opened, edited, assigned]
   issue_comment:
     types: [created, edited]
