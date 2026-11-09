@@ -42,9 +42,13 @@ inputs:
 
       Only post GitHub comments — don't submit review text as messages.
 
-      For the commands below: write the comment body to a file under
-      /tmp/pr-review-scratch first with the Write tool, then pass that file's
-      path with `--body-file`. This avoids shell special characters.
+      For the commands below: write the comment body to a file under the already
+      created /tmp/pr-review-scratch directory with the Write tool, then pass
+      that file's path to the command with `--body-file`. This avoids shell
+      special characters.
+
+      Note that if you try to run `mkdir` or anything else that writes to the
+      filesystem outside of the scratch directory, the tool will fail.
 
       1. Use `pr-review reply-inline-comment --comment-id ID --body-file PATH`
          to reply to existing inline comments if they have been resolved, if
