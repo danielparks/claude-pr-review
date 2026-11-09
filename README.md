@@ -6,7 +6,7 @@
 - **Re-review only what changed.** On every push, the new diff is compared against what was last reviewed. A rebase with no real code changes triggers nothing; a real change gets Claude a diff-of-diffs showing exactly what’s new, so a re-review addresses the update, not the entire PR again.
 - **Post like a real review, as a real reviewer.** A [bundled CLI][pr-review] lets Claude queue inline comments and submit them as a single grouped review — not one review per comment, which is what you get from [anthropics/claude-code-action]’s built-in inline-comment tool.
 - **Fail safe.** If Claude’s turn ends or errors out partway through, whatever was queued is still posted (as `claude[bot]` when possible, otherwise by a final fallback step as `github-actions[bot]`), and any pending approval is automatically downgraded to a plain comment rather than going out unearned.
-- **Stay inside the bounds you set.** The default configuration restricts what Claude can do while allowing you to pick and choose additional [specialized tooling][opt-in-tools] appropriate to your repo. See [PERMISSIONS.md] for what Claude can and can’t do, and what the app token implies.
+- **Stay inside the bounds you set.** The default configuration restricts what Claude can do while allowing you to pick and choose additional [specialized tooling][opt-in-tools] appropriate to your repo. See [PERMISSIONS.md] for what Claude can and can’t do and why.
 
 ## Quick start
 
@@ -53,9 +53,13 @@ the current state of the PR from context. Defaults to:
 
     Only post GitHub comments — don't submit review text as messages.
 
-    For the commands below: write the comment body to a file under
-    /tmp/pr-review-scratch first with the Write tool, then pass that file's
-    path with `--body-file`. This avoids shell special characters.
+    For the commands below: write the comment body to a file under the already
+    created /tmp/pr-review-scratch directory with the Write tool, then pass
+    that file's path to the command with `--body-file`. This avoids shell
+    special characters.
+
+    Note that if you try to run `mkdir` or anything else that writes to the
+    filesystem outside of the scratch directory, the tool will fail.
 
     1. Use `pr-review reply-inline-comment --comment-id ID --body-file PATH`
        to reply to existing inline comments if they have been resolved, if

@@ -2,17 +2,17 @@
 
 What can Claude actually do when it reviews a PR with this action, and what stops it from doing more? There are several independent layers. Each one is imperfect on its own; the point is that they overlap.
 
-The threat to keep in mind is **prompt injection**: a PR, comment, or file that Claude reads contains instructions that try to make it do something you didn’t intend. Claude is generally reliable, but the layers below are what bound the damage when it isn’t.
+The threat to keep in mind is **prompt injection**: a PR, comment, or file that Claude reads contains instructions that try to make it do something you didn’t intend. Claude is generally reliable, but the layers below are what constrain the damage when it isn’t.
 
 ## The layers
 
 ### 1. The workflow token (`GITHUB_TOKEN`)
 
-Bounded by the `permissions:` block in your workflow. The example workflows grant only `contents: read`, `pull-requests: write`, `issues: write`, `actions: read`, and `id-token: write`, and check out with `persist-credentials: false`, so git has no stored credentials and cannot push.
+Constrained by the `permissions:` block in your workflow. The example workflows grant only `contents: read`, `pull-requests: write`, `issues: write`, `actions: read`, and `id-token: write`, and check out with `persist-credentials: false`, so git has no stored credentials and cannot push.
 
 This action uses the workflow token for setup (rendering the PR discussion, fetching labels) and for the fallback `sweep` step after Claude finishes (see below).
 
-**This layer does not bound Claude** — see the next one.
+**This layer does not constrain Claude** — see the next one.
 
 ### 2. The Claude App token
 
@@ -62,28 +62,12 @@ These are independent of this action and are the strongest defenses available to
 - **“Allow GitHub Actions to create and approve pull requests”** does _not_ constrain the Claude app, because its token is a different credential than the workflow’s. See [Opt-in tools][opt-in-tools].
 - **The thinking log artifact** (`thinking-log-artifact-retention`) is redacted on a best-effort basis and may expose secrets; think twice before enabling it on a public repository.
 
-## How comments get posted
-
-Because the app token dies when the Claude step ends, queued comments need to be posted before then:
-
-1. Claude calls `pr-review comment-review` (or another finalizing subcommand) itself, as `claude[bot]`.
-2. If it didn’t, a `Stop` hook configured by `cli/action-setup` runs `pr-review sweep --downgrade-approval` inside Claude’s own process when its turn ends. It inherits the app token, so this also posts as `claude[bot]`.
-3. A final fallback step in `action.yaml` runs `sweep` again with the workflow token, in case Claude crashed before the hook ran. Anything it posts comes from `github-actions[bot]`, and approvals are always downgraded to comments.
-
 ## Tightening things up
-
-What you can do today:
 
 1. Keep `allowed-tools` as it is, and be conservative with `additional-allowed-tools`. Prefer exact, narrow entries over `:*` on commands with write modes, and avoid the risky categories listed under layer 3.
 2. Turn on branch protection or rulesets, and keep the Claude app out of bypass lists.
 3. Gate the workflow on `author_association` as the examples do.
 4. Leave the opt-in `pr-review` subcommands off unless you need them, and document in your `additional-prompt` when Claude should use them.
-
-What you can’t do yet, but which would help:
-
-- **Use your own GitHub App token** with only the permissions this action needs (`pull-requests: write`, `issues: write`, `contents: read`, `actions: read`). That would remove the biggest gap, at the cost of comments no longer coming from `claude[bot]` unless your app has that name.
-- **Run Claude’s Bash tool in a sandbox with a network allowlist** (only `api.github.com`), so that `git push` and exfiltration fail regardless of the command line.
-- **Ask for a down-scoped app token** from [anthropics/claude-code-action], so the exchange honors the workflow’s `permissions:`.
 
 [anthropics/claude-code-action]: https://github.com/anthropics/claude-code-action
 [opt-in-tools]: cli/README.md#opt-in-tools

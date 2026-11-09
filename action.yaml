@@ -290,12 +290,14 @@ runs:
       # Runs even if the step above failed or Claude never called
       # `comment-review` itself (it's a no-op when nothing was ever queued).
       #
-      # This deliberately uses the workflow's token, not the Claude App token:
-      # the app token is revoked as soon as the Claude step finishes. A Stop
-      # hook (see `cli/action-setup`) already sweeps while the app token is
-      # still valid, so this only catches what that missed, e.g. if Claude
-      # crashed. Reviews it posts come from `github-actions[bot]`, which can't
-      # be trusted to approve, so approvals are always downgraded.
+      # This is a secondary fallback; normally the Stop hook on Claude’s harness
+      # will sweep the comments.
+      #
+      # Something went wrong, so approvals are downgraded to comments.
+      #
+      # The Claude App token is revoked at this point, so this step uses the
+      # workflow token, which posts comments as `github-actions[bot]` instead of
+      # the Claude bot.
       if: always() && steps.setup.outcome == 'success'
       shell: bash
       env:

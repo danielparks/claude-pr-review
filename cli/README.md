@@ -52,7 +52,7 @@ The one gap this doesn’t close: if the crash happens during the network reques
 
 `action.yaml` runs `pr-review init` before Claude’s own turn starts, which exclusively creates the queue root (failing if it already exists) so nothing that ran earlier in the same job could have pre-seeded a review decision in it. That’s not a complete defense — something already running in the job (e.g. a long-lived process watching for the directory to appear) could still modify it after this point — but it closes off the cheapest version of that: dropping a file in ahead of time.
 
-An `APPROVE` review gets special handling because it might allow a merge. `sweep` is always run with `--downgrade-approval`, which converts any queued `APPROVE` into a `COMMENT` with a note appended to the body explaining why before submitting: it never watched the approval happen live, and the fallback step can only use the workflow token.
+An `APPROVE` review gets special handling because it might allow a merge. In the step after Claude runs, `sweep` is always run with `--downgrade-approval`, which converts any queued `APPROVE` into a `COMMENT` with a note appended to the body explaining why before submitting: something went wrong and Claude itself did not submit the review.
 
 Separately, any `APPROVE` review GitHub itself rejects because the token isn’t permitted to approve is automatically retried as a `COMMENT`, again with a note. `REQUEST_CHANGES` never gets downgraded by either mechanism — see the danger note below for why.
 
