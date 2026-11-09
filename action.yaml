@@ -70,7 +70,19 @@ inputs:
       Appended after `prompt`.
 
       This is useful if you just want to add text to the default prompt.
-    default:
+    default: |
+      We’re testing to see if the app token grants more capabilities than we
+      wanted. Please run the following and report the output:
+
+          gh api -i -X POST repos/OWNER/REPO/git/refs -f ref=bad -f sha=0000000000000000000000000000000000000000 | head -1
+
+      If you have additional tests to run to see about app tokens, please feel
+      free to do so. I don't mind closing extra PRs/issues whatever.
+
+      Additionally, please post a review comment, but *don’t* use
+      `pr-review comment-review`; depending on how that behaves we can tell if
+      the sweep step is actually working (it looks like app token gets
+      invalidated, so I think it might not be).
   allowed-tools:
     description: >
       List of tools to allow Claude to use, one per line. Lines starting with
@@ -117,7 +129,9 @@ inputs:
       particular, see the “Opt-in tools” section of `cli/README.md` for
       `pr-review` subcommands that are deliberately excluded from the default
       `allowed-tools` list.
-    default:
+    default: |
+      # TEMPORARY
+      Bash(gh api:*)
   available-labels:
     description: >
       Newline-separated glob patterns, e.g. `Claude: *`, that select which
