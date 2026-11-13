@@ -25,8 +25,8 @@ repos:
         args: []
   - repo: local
     hooks:
-      - id: prettier
-        name: prettier
+      - id: oxfmt
+        name: oxfmt
         language: system
         entry: scripts/format --check
         pass_filenames: true

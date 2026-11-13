@@ -11,7 +11,7 @@ cd cli
 npm ci
 npm run lint    # eslint
 npm test        # vitest run
-npm run format  # prettier --write
+npm run format  # oxfmt
 ```
 
 Run a single test file: `npx vitest run test/queue.test.js` (from `cli/`). Use `npx vitest run -t "name"` to filter by test name.
@@ -20,7 +20,7 @@ Repo-wide checks (also run by pre-commit, see `.pre-commit-config.yaml`):
 
 ```sh
 scripts/cli-check          # npm ci (if needed) + lint + test in cli/
-scripts/format --check     # prettier over js/ts/json/markdown/yaml
+scripts/format --check     # oxfmt over js/ts/json/markdown/yaml
 scripts/sync-readme        # sync <!-- default:NAME --> blocks in README.md from action.yaml
 scripts/generate-workflows # regenerate .github/workflows/ from workflow-*.yaml examples
 scripts/zizmor-online --persona=pedantic  # zizmor lint for the workflow/action YAML

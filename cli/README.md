@@ -108,7 +108,7 @@ Like `reply-inline-comment`, this posts immediately rather than going through th
 npm ci
 npm run lint    # eslint
 npm test        # vitest
-npm run format  # prettier --write
+npm run format  # oxfmt
 ```
 
 `lib/queue.js` (the claim/retry mechanics) and `lib/github.js` (the GitHub API calls) each have their own unit tests, colocated as `test/*.test.js`, that don’t spawn a subprocess. `test/pr-review.test.js` spawns the real `pr-review` script as a subprocess, exactly how Claude’s Bash tool invokes it in production.
