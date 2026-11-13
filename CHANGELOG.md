@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bugfixes
 
+- Namespaced the diff cache key (`danielparks-claude-pr-review-diff-…`) and directory (`.danielparks-claude-pr-review-cache`). The old generic `pr-diff-<PR number>-` key prefix could collide with other workflow steps using the same prefix, restoring unrelated cache contents and making this action wrongly skip reviews as “PR unchanged”. Existing caches are orphaned, so each open PR's next review omits the “Changes since last review” section once.
 - Fixed the fallback `sweep` step failing because the Claude App token was revoked when the Claude step finished. Queued comments are now posted by a `Stop` hook while the token is still valid, and the fallback step uses the workflow token (so it posts as `github-actions[bot]`) and always downgrades approvals to comments.
 - Clarified default prompt to ensure Claude always leaves an initial review, and always follows up when its requests are answered.
 
