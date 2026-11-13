@@ -56,7 +56,7 @@ The Claude App token — what makes review comments post as `claude[bot]` instea
 
 ### `action.yaml` flow
 
-1. Compute the PR diff against the merge base, cache it (under `$RUNNER_TEMP`, outside the checkout), and compare to the previous cached diff. If identical (e.g. a rebase with no real changes), skip the rest — no re-review needed. If different, build a diff-of-diffs to show Claude what changed since last review.
+1. `cli/pr-diff-check` computes the PR diff against the merge base, caches it (under `$RUNNER_TEMP`, outside the checkout; `actions/cache` steps restore and save it), and compares to the previous cached diff. If identical (e.g. a rebase with no real changes), skip the rest — no re-review needed. If different, build a diff-of-diffs to show Claude what changed since last review.
 2. `cli/action-setup` does everything else needed before Claude's turn: `pr-review init` creates the exclusive queue directory (`$RUNNER_TEMP/pr-review-queue`; Claude cannot run `init` itself), `gh-pr-render` renders the full PR discussion (a separate npm package, fetched at whatever version — this action doesn't vendor it), labels matching `available-labels` are fetched so `pr-review`'s label subcommands can enforce the allowlist, and `claude_args` is built — the `--allowedTools` list plus `--mcp-config`/`--permission-prompt-tool` pointing at `cli/pr-review-permission-prompt`, so a tool call outside `allowed-tools` gets a clear denial instead of headless mode's generic one.
 3. Run `anthropics/claude-code-action` with that context, restricted to `allowed-tools` (see `README.md`), including the `pr-review` subcommands.
 4. Always run `pr-review sweep` afterward (skipped along with the rest of the above if the diff check found nothing changed) to post anything Claude queued but didn't finalize itself, retry any abandoned in-flight submission, and downgrade any queued `APPROVE` to `COMMENT` if the Claude step failed or the real `claude[bot]` token wasn't available.
@@ -77,6 +77,7 @@ Queuing a comment only ever creates a new uniquely-named file, and claiming/mark
 ### Key files
 
 - `cli/pr-review` — the CLI entry point / command dispatch.
+- `cli/pr-diff-check` / `cli/lib/diff-check.js` — the diff check: merge-base diff, normalization, cache comparison, diff-of-diffs. An empty diff skips with a warning rather than counting as "unchanged".
 - `cli/action-setup` — runs between the diff check and Claude's turn: queue init, `gh-pr-render`, label fetching, and building `claude_args`.
 - `cli/pr-review-permission-prompt` — the MCP server backing `--permission-prompt-tool`; denies anything outside `allowed-tools`, naming the specific command in the denial message.
 - `cli/lib/queue.js` — the claim/retry state machine described above.
