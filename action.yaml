@@ -180,13 +180,19 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: diff cache
+    - name: Set diff cache path variable
+      shell: bash
+      run: |
+        echo "CACHE_PREFIX=danielparks-claude-pr-review-" >> "$GITHUB_ENV"
+        echo "CACHE_PATH=.${CACHE_PREFIX}cache" >> "$GITHUB_ENV"
+
+    - name: Restore diff cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: .danielparks-claude-pr-review-cache
-        key: danielparks-claude-pr-review-diff-${{ github.event.pull_request.number }}-${{ github.run_id }}
+        path: ${{ env.CACHE_PATH }}
+        key: ${{ env.CACHE_PREFIX }}diff-${{ github.event.pull_request.number }}-${{ github.run_id }}
         restore-keys: |
-          danielparks-claude-pr-review-diff-${{ github.event.pull_request.number }}-
+          ${{ env.CACHE_PREFIX }}diff-${{ github.event.pull_request.number }}-
 
     - name: Compute and compare diffs
       id: diff
@@ -222,17 +228,17 @@ runs:
         # Produce overall diff for PR for Claude.
         git diff "${MERGE_BASE}..${HEAD_SHA}" >/tmp/pr.patch
 
-        mkdir -p .danielparks-claude-pr-review-cache
+        mkdir -p "$CACHE_PATH"
 
         # Remove line numbers from @@ hunk headers and delete index lines (base
         # blob SHAs) so that a clean rebase produces an identical diff.
         # Note: binary files are excluded from the diff and won't be reviewed.
         grep -v '^index ' /tmp/pr.patch \
           | sed -e 's/^@@.*@@/@@ - - @@/' \
-          > .danielparks-claude-pr-review-cache/new.patch
+          > "${CACHE_PATH}/new.patch"
 
-        if [ -f .danielparks-claude-pr-review-cache/prev.patch ]; then
-          if diff .danielparks-claude-pr-review-cache/prev.patch .danielparks-claude-pr-review-cache/new.patch >/dev/null ; then
+        if [ -f "${CACHE_PATH}/prev.patch" ]; then
+          if diff "${CACHE_PATH}/prev.patch" "${CACHE_PATH}/new.patch" >/dev/null ; then
             echo PR unchanged
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
@@ -242,14 +248,14 @@ runs:
               echo "diff_section<<EOF-${DELIM}"
               echo '## Changes since last review'
               echo '```'
-              diff .danielparks-claude-pr-review-cache/prev.patch .danielparks-claude-pr-review-cache/new.patch || true
+              diff "${CACHE_PATH}/prev.patch" "${CACHE_PATH}/new.patch" || true
               echo '```'
               echo "EOF-${DELIM}"
             } >> "$GITHUB_OUTPUT"
           fi
         fi
 
-        cp .danielparks-claude-pr-review-cache/new.patch .danielparks-claude-pr-review-cache/prev.patch
+        cp "${CACHE_PATH}/new.patch" "${CACHE_PATH}/prev.patch"
 
     - name: Set up environment and build Claude context
       id: setup
