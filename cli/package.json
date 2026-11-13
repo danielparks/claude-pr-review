@@ -1,18 +1,15 @@
 {
   "name": "pr-review-cli",
   "version": "0.1.0",
-  "description": "CLI Claude uses (via its Bash tool) to post PR review comments as claude[bot] for danielparks/claude-pr-review",
-  "author": "Daniel Parks <oss-pr-review@demonhorse.org> (https://demon.horse)",
-  "license": "MIT OR Apache-2.0",
   "private": true,
+  "description": "CLI Claude uses (via its Bash tool) to post PR review comments as claude[bot] for danielparks/claude-pr-review",
+  "license": "MIT OR Apache-2.0",
+  "author": "Daniel Parks <oss-pr-review@demonhorse.org> (https://demon.horse)",
   "type": "module",
   "scripts": {
     "lint": "eslint",
     "format": "prettier --write .",
     "test": "vitest run"
-  },
-  "engines": {
-    "node": ">=20.18.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -21,5 +18,8 @@
     "globals": "^17.7.0",
     "prettier": "^3.9.5",
     "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=20.18.3"
   }
 }
