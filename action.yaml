@@ -180,19 +180,24 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Set diff cache path variable
+    - name: Set diff cache names
+      id: cache-names
       shell: bash
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
       run: |
-        echo "CACHE_PREFIX=danielparks-claude-pr-review-" >> "$GITHUB_ENV"
-        echo "CACHE_PATH=.${CACHE_PREFIX}cache" >> "$GITHUB_ENV"
+        # Set diff cache names.
+        prefix=danielparks-claude-pr-review-
+        echo "key-prefix=${prefix}diff-${PR_NUMBER}-" >> "$GITHUB_OUTPUT"
+        echo "path=${RUNNER_TEMP}/${prefix}cache" >> "$GITHUB_OUTPUT"
 
     - name: Restore diff cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ${{ env.CACHE_PATH }}
-        key: ${{ env.CACHE_PREFIX }}diff-${{ github.event.pull_request.number }}-${{ github.run_id }}
+        path: ${{ steps.cache-names.outputs.path }}
+        key: ${{ steps.cache-names.outputs.key-prefix }}${{ github.run_id }}
         restore-keys: |
-          ${{ env.CACHE_PREFIX }}diff-${{ github.event.pull_request.number }}-
+          ${{ steps.cache-names.outputs.key-prefix }}
 
     - name: Compute and compare diffs
       id: diff
@@ -202,6 +207,7 @@ runs:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         REPO_URL: "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+        CACHE_PATH: ${{ steps.cache-names.outputs.path }}
       run: |
         # Get the merge base SHA from the API, then fetch and diff locally.
         set -euo pipefail
