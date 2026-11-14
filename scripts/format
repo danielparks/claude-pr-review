@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # Used to run oxfmt in CI. Keep the version in sync with `cli/package.json`
-# so `npm run format` and this script format identically.
+# so `npm run format` and this script format identically;
+# `scripts/update-pinned-tools` bumps both.
 
 npm exec --yes --prefix "$(mktemp -d)" --package=oxfmt@0.78.0 -- oxfmt "$@"

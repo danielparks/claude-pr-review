@@ -8,7 +8,9 @@ usage() {
 Usage: ${0##*/}
 
 Bump the pinned actionlint/ghalint versions in
-.github/workflows/pr-checks.yaml to their latest GitHub releases.
+.github/workflows/pr-checks.yaml to their latest GitHub releases, and the
+pinned oxfmt version in scripts/format and cli/package.json (plus its lock
+file) to the latest npm release.
 
 This does not verify the new release's attestation itself. Bumping the
 version busts the actions/cache key in that workflow, so the next time
@@ -57,3 +59,29 @@ update_version() {
 
 update_version ACTIONLINT_VERSION kjanat/actionlint
 update_version GHALINT_VERSION suzuki-shunsuke/ghalint
+
+update_oxfmt() {
+  local current latest tmp
+
+  current=$(sed -n 's/.*--package=oxfmt@\([0-9][^ ]*\) .*/\1/p' scripts/format)
+  if [[ -z "$current" ]] ; then
+    echo "Pinned oxfmt version not found in scripts/format" >&2
+    exit 1
+  fi
+
+  latest=$(npm view oxfmt version)
+  if [[ "$current" == "$latest" ]]; then
+    return
+  fi
+
+  sed -i.bak "s/--package=oxfmt@${current} /--package=oxfmt@${latest} /" \
+    scripts/format
+  rm scripts/format.bak
+  # Updates cli/package.json and cli/package-lock.json without touching
+  # node_modules.
+  (cd cli && npm install --package-lock-only --save-dev --save-exact \
+    "oxfmt@${latest}")
+  echo "Updated oxfmt: ${current} -> ${latest}"
+}
+
+update_oxfmt
