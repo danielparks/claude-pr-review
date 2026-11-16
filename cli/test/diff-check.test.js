@@ -91,17 +91,45 @@ describe("compareAndCache", () => {
     expect(result.status).toBe("unchanged");
   });
 
-  it("does not treat an empty diff as unchanged", async () => {
-    await compareAndCache("", cache);
+  it("skips and saves nothing when the first diff is empty", async () => {
     const result = await compareAndCache("", cache);
-    expect(result).toMatchObject({ status: "empty", skip: true });
+    expect(result).toMatchObject({ status: "empty", skip: true, section: "" });
+    await expect(readFile(join(cache, "prev.patch"), "utf8")).rejects.toThrow(
+      /ENOENT/,
+    );
   });
 
-  it("reviews normally after an empty diff", async () => {
+  it("treats the first real diff after an empty first run as a first review", async () => {
     await compareAndCache("", cache);
     const result = await compareAndCache(patch(10), cache);
-    expect(result.status).toBe("changed");
-    expect(result.skip).toBe(false);
+    expect(result).toMatchObject({ status: "first", skip: false, section: "" });
+  });
+
+  it("reports a PR that becomes empty, listing its old files", async () => {
+    await compareAndCache(patch(10), cache);
+    const result = await compareAndCache("", cache);
+    expect(result).toMatchObject({ status: "emptied", skip: false });
+    expect(result.section).toContain("now **empty**");
+    expect(result.section).toContain("- `f`");
+    expect(result.section).toContain("outdated");
+  });
+
+  it("saves the empty diff so a second empty push is skipped", async () => {
+    await compareAndCache(patch(10), cache);
+    await compareAndCache("", cache);
+    expect(await readFile(join(cache, "prev.patch"), "utf8")).toBe("");
+    const result = await compareAndCache("", cache);
+    expect(result).toMatchObject({ status: "unchanged", skip: true });
+  });
+
+  it("says everything is new when a PR is refilled after being empty", async () => {
+    await compareAndCache(patch(10), cache);
+    await compareAndCache("", cache);
+    const result = await compareAndCache(patch(10), cache);
+    expect(result).toMatchObject({ status: "refilled", skip: false });
+    expect(result.section).toContain("**empty** at the last review");
+    expect(result.section).toContain("outdated");
+    expect(result.section).not.toContain("```");
   });
 
   it("ignores a cache directory left by something else", async () => {

@@ -71,6 +71,19 @@ async function main() {
   const patch = await run("git", "diff", `${mergeBase}..${headSha}`);
   await writeFile("/tmp/pr.patch", patch);
 
+  // GitHub's own count of changed files tells a PR that really is empty
+  // (everything reverted, or already in the base) from a bad merge base or
+  // checkout. That has to be checked first because compareAndCache saves the
+  // baseline, and a bad empty diff must neither be saved nor silently skip the
+  // review.
+  const changedFiles = process.env.CHANGED_FILES;
+  if (patch.trim() === "" && changedFiles && Number(changedFiles) > 0) {
+    throw new Error(
+      `The PR diff is empty, but GitHub reports ${changedFiles} changed ` +
+        `file(s); merge base ${mergeBase} may be wrong`,
+    );
+  }
+
   const { status, skip, section, previous, current } = await compareAndCache(
     patch,
     cachePath,
@@ -83,6 +96,11 @@ async function main() {
   if (status === "empty") {
     console.log(
       "::warning::The PR has no changes against its merge base; skipping review.",
+    );
+  } else if (status === "emptied") {
+    console.log(
+      "::notice::The PR no longer has any changes against its merge base; " +
+        "Claude will be told.",
     );
   }
 
