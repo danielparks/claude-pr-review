@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import { appendFile } from "node:fs/promises";
 import { positiveInt } from "./args.js";
 
 export function actionContext() {
@@ -37,4 +39,23 @@ export function requireToken() {
     fail("GITHUB_TOKEN or GH_TOKEN environment variable is required");
   }
   return token;
+}
+
+/**
+ * Append a multi-line step output to `$GITHUB_OUTPUT`, using a random
+ * delimiter so the value can't terminate it early.
+ */
+export async function writeOutput(name, value) {
+  const delim = `EOF-${randomBytes(8).toString("hex")}`;
+  const valueStr = String(value);
+  if (valueStr.split("\n").some((line) => line === delim)) {
+    fail(
+      `Output '${name}' has line matching random delimiter '${delim}'. Retry ` +
+        "the workflow.",
+    );
+  }
+  await appendFile(
+    process.env.GITHUB_OUTPUT,
+    `${name}<<${delim}\n${valueStr}\n${delim}\n`,
+  );
 }

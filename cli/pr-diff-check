@@ -1,0 +1,108 @@
+#!/usr/bin/env node
+
+// Computes the PR diff against the merge base for Claude (`/tmp/pr.patch`),
+// compares it to the diff cached from the previous run, then sets the `skip`
+// and `diff_section` outputs.
+//
+// The cache itself is restored and saved by `actions/cache` steps in
+// `action.yaml`; this only reads and writes `$CACHE_PATH`.
+
+import { execFile } from "node:child_process";
+import { writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
+import { compareAndCache } from "./lib/diff-check.js";
+import { repoFromEnv, requireToken, writeOutput } from "./lib/util.js";
+
+const execFileAsync = promisify(execFile);
+
+async function run(command, ...args) {
+  return (await execFileAsync(command, args, { maxBuffer: 1024 * 1024 * 1024 }))
+    .stdout;
+}
+
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} environment variable is required`);
+  }
+  return value;
+}
+
+async function hasCommit(sha) {
+  try {
+    await run("git", "cat-file", "-e", `${sha}^{commit}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function main() {
+  const baseSha = requireEnv("BASE_SHA");
+  const headSha = requireEnv("HEAD_SHA");
+  const cachePath = requireEnv("CACHE_PATH");
+  const token = requireToken();
+  const { owner, repo } = repoFromEnv();
+  const repoUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+
+  // Using the merge base (rather than BASE_SHA) ensures we only diff what the PR
+  // author changed, excluding commits pushed to the base branch after this
+  // branch was created.
+  const mergeBase = (
+    await run(
+      "gh",
+      "api",
+      `repos/${owner}/${repo}/compare/${baseSha}...${headSha}`,
+      "--jq",
+      ".merge_base_commit.sha",
+    )
+  ).trim();
+  if (!mergeBase) {
+    throw new Error("Failed to resolve merge base from GitHub API");
+  }
+  console.log(`base ${baseSha} head ${headSha} merge base ${mergeBase}`);
+
+  for (const sha of [mergeBase, headSha]) {
+    if (!(await hasCommit(sha))) {
+      await run("git", "fetch", "--depth=1", repoUrl, sha);
+    }
+  }
+
+  // Note: binary files are excluded from the diff and won't be reviewed.
+  const patch = await run("git", "diff", `${mergeBase}..${headSha}`);
+  await writeFile("/tmp/pr.patch", patch);
+
+  // GitHub's count of changed files tells a PR that really is empty (everything
+  // reverted, or already in the base) from a bad merge base or checkout. Check
+  // before compareAndCache to avoid saving a bad empty diff as the baseline.
+  const changedFiles = process.env.CHANGED_FILES;
+  if (patch.trim() === "" && changedFiles && Number(changedFiles) > 0) {
+    throw new Error(
+      `The PR diff is empty, but GitHub reports ${changedFiles} changed ` +
+        `file(s); merge base ${mergeBase} may be wrong`,
+    );
+  }
+
+  const { changed, section, previous, current } = await compareAndCache(
+    patch,
+    cachePath,
+  );
+
+  const describe = (s) => (s ? `${s.lines} lines, sha256 ${s.sha256}` : "none");
+  console.log(`previous diff: ${describe(previous)}`);
+  console.log(`current diff:  ${describe(current)}`);
+  console.log(`PR diff status: ${changed ? "changed" : "unchanged"}`);
+
+  if (!changed) {
+    await writeOutput("skip", "true");
+  }
+
+  if (section) {
+    await writeOutput("diff_section", section);
+  }
+}
+
+main().catch((error) => {
+  console.error(`::error::${error}`);
+  process.exit(1);
+});

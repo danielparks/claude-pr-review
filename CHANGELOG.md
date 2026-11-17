@@ -10,9 +10,16 @@ All notable changes to this project will be documented in this file.
 
 ### Bugfixes
 
-- Namespaced the diff cache key prefix (`danielparks-claude-pr-review-diff-`) and moved the cache directory out of the workspace to `$RUNNER_TEMP/danielparks-claude-pr-review-cache` so it can’t be picked up by later steps that scan or commit the checkout. The old generic `pr-diff-` key prefix was too generic and might collide with other workflow steps using the same prefix, which could insert garbage into Claude’s prompt or incorrectly skip reviewing changes. This orphans existing caches, so each open PR’s next review will run unconditionally.
+- Namespaced the diff cache key prefix (`danielparks-claude-pr-review-diff-`) to avoid potential conflicts which could insert garbage into Claude’s prompt or incorrectly skip reviewing changes. This orphans existing caches, so each open PR’s next review will run unconditionally.
+- Moved the cache directory out of the workspace to `$RUNNER_TEMP/danielparks-claude-pr-review-cache` so it can’t be picked up by later steps that scan or commit the checkout.
 - Fixed the fallback `sweep` step failing because the Claude App token was revoked when the Claude step finished. Queued comments are now posted by a `Stop` hook while the token is still valid, and the fallback step uses the workflow token (so it posts as `github-actions[bot]`) and always downgrades approvals to comments.
-- Clarified default prompt to ensure Claude always leaves an initial review, and always follows up when its requests are answered.
+- Clarified the default prompt to ensure Claude always leaves an initial review, and always follows up when its requests are answered.
+
+### Changes
+
+- Moved the diff check from inline shell in `action.yaml` into a tested script (`cli/pr-diff-check`).
+  - It now logs the merge base and the size and checksum of the current and previous diffs.
+  - It now handles an empty PR diff explicitly. If GitHub reports changed files then it fails, otherwise it explicitly informs Claude the diff is empty.
 
 ## Release 2.0.0 (2026-11-07)
 

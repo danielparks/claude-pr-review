@@ -47,6 +47,11 @@ the current state of the PR from context. Defaults to:
     changes. If nothing has changed there is no need to note it unless the
     user seems to think that changes were made.
 
+    An inline comment marked outdated is no longer attached to the current
+    diff because the code under it changed or was removed. That does not mean
+    the issue was fixed, so check whether it still applies to the current code
+    before treating it as resolved. If it does, say so in the thread.
+
     If you have not reviewed this PR before, or if your previous review
     requested changes and those requests were answered, always post a review
     even if it's just to say that the change looks good.

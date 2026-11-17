@@ -5,12 +5,11 @@
 // labels, and writes claude_args. Outputs land in $GITHUB_OUTPUT and
 // $GITHUB_ENV/$GITHUB_PATH for subsequent steps.
 
-import { randomBytes } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fetchAndWriteLabels } from "./lib/labels.js";
-import { actionContext, fail } from "./lib/util.js";
+import { actionContext, writeOutput } from "./lib/util.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,21 +19,6 @@ async function run(command, ...args) {
 
 function shQuote(value) {
   return "'" + String(value).replace(/'/g, "'\\''") + "'";
-}
-
-async function writeOutput(name, value) {
-  const delim = `EOF-${randomBytes(8).toString("hex")}`;
-  const valueStr = String(value);
-  if (valueStr.split("\n").some((line) => line === delim)) {
-    fail(
-      `Output '${name}' has line matching random delimiter '${delim}'. Retry ` +
-        "the workflow.",
-    );
-  }
-  await appendFile(
-    process.env.GITHUB_OUTPUT,
-    `${name}<<${delim}\n${valueStr}\n${delim}\n`,
-  );
 }
 
 async function main() {
