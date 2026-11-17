@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { countLines } from "./util.js";
@@ -70,11 +70,12 @@ function emptiedSection(prev) {
     "",
     "The PR diff is now **empty**: it has no changes against its merge base. " +
       "This usually means the changes were reverted or already landed in the " +
-      "base branch. At the last review it changed:",
-    "",
+      "base branch." +
+      (paths.length > 0 ? " At the last review it changed:\n" : ""),
     ...paths.map((path) => `- \`${path}\``),
     "",
     OUTDATED_NOTE,
+    "",
     "Tell the author what you see, and ask whether this is intentional.",
   ].join("\n");
 }
@@ -91,27 +92,18 @@ function refilledSection() {
 }
 
 /**
- * Compare a PR's patch to the one cached from the previous run, then make it
- * the new baseline.
+ * Compare a PR's patch to the cached baseline, then make it the new baseline.
  *
  * The baseline is what the reviewer last saw, including an empty PR. Returns
- * `{ status, skip, section, previous, current }` where `status` is:
+ * `{ changed, section, previous, current }`. `previous` and `current` summarize
+ * the normalized patches for the log, and `section` shows what has changed
+ * since the last review in Markdown format.
  *
- * - `"first"`: nothing cached; review the whole PR.
- * - `"unchanged"`: identical to the cached patch (empty or not); skip.
- * - `"changed"`: differs; `section` is a Markdown diff-of-diffs.
- * - `"emptied"`: the PR was non-empty and now has no changes; `section` says so
- *   and lists the files it used to change, so the review can explain it to the
- *   author. Don't skip: a silent skip leaves no feedback.
- * - `"refilled"`: the PR was empty and now has changes; `section` says all of
- *   it is new, since a diff-of-diffs against nothing is just the whole patch.
- * - `"empty"`: nothing cached and the PR is empty; skip. Nothing was reviewed,
- *   so nothing is saved.
+ * If nothing is cached then this always returns `changed === true` even if the
+ * new patch is completely empty. Claude can explain the situation to the user.
  *
  * Callers must rule out an empty patch caused by a bad checkout or merge base
  * *before* calling this, because it saves the baseline.
- *
- * `previous` and `current` summarize the normalized patches for the log.
  */
 export async function compareAndCache(rawPatch, cachePath) {
   await mkdir(cachePath, { recursive: true });
@@ -121,41 +113,28 @@ export async function compareAndCache(rawPatch, cachePath) {
   const current = normalizePatch(rawPatch);
   await writeFile(newPath, current);
   const prev = await readIfExists(prevPath);
-  const isEmpty = (patch) => patch.trim() === "";
 
   const result = {
+    changed: prev !== current,
     previous: prev === null ? null : summarize(prev),
     current: summarize(current),
-    skip: false,
     section: "",
   };
 
-  if (prev === current) {
-    result.status = "unchanged";
-    result.skip = true;
-  } else if (prev === null) {
-    if (isEmpty(current)) {
-      result.status = "empty";
-      result.skip = true;
-      return result;
-    }
-    result.status = "first";
-  } else if (isEmpty(current)) {
-    result.status = "emptied";
-    result.section = emptiedSection(prev);
-  } else if (isEmpty(prev)) {
-    result.status = "refilled";
+  if (result.current.lines === 0) {
+    result.section = emptiedSection(prev ?? "");
+  } else if (result.previous?.lines === 0) {
     result.section = refilledSection();
-  } else {
-    result.status = "changed";
+  } else if (result.changed && result.previous) {
     result.section = [
       "## Changes since last review",
+      "",
       "```",
       (await textDiff(prevPath, newPath)).replace(/\n$/, ""),
       "```",
     ].join("\n");
   }
 
-  await writeFile(prevPath, current);
+  await rename(newPath, prevPath);
   return result;
 }

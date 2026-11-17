@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 // Computes the PR diff against the merge base for Claude (`/tmp/pr.patch`),
-// compares it to the diff cached from the previous run, and sets the `skip` and
-// `diff_section` outputs. The cache itself is restored and saved by
-// `actions/cache` steps in `action.yaml`; this only reads and writes
-// `$CACHE_PATH`.
+// compares it to the diff cached from the previous run, then sets the `skip`
+// and `diff_section` outputs.
+//
+// The cache itself is restored and saved by `actions/cache` steps in
+// `action.yaml`; this only reads and writes `$CACHE_PATH`.
 
 import { execFile } from "node:child_process";
 import { writeFile } from "node:fs/promises";
@@ -71,11 +72,9 @@ async function main() {
   const patch = await run("git", "diff", `${mergeBase}..${headSha}`);
   await writeFile("/tmp/pr.patch", patch);
 
-  // GitHub's own count of changed files tells a PR that really is empty
-  // (everything reverted, or already in the base) from a bad merge base or
-  // checkout. That has to be checked first because compareAndCache saves the
-  // baseline, and a bad empty diff must neither be saved nor silently skip the
-  // review.
+  // GitHub's count of changed files tells a PR that really is empty (everything
+  // reverted, or already in the base) from a bad merge base or checkout. Check
+  // before compareAndCache to avoid saving a bad empty diff as the baseline.
   const changedFiles = process.env.CHANGED_FILES;
   if (patch.trim() === "" && changedFiles && Number(changedFiles) > 0) {
     throw new Error(
@@ -84,7 +83,7 @@ async function main() {
     );
   }
 
-  const { status, skip, section, previous, current } = await compareAndCache(
+  const { changed, section, previous, current } = await compareAndCache(
     patch,
     cachePath,
   );
@@ -92,21 +91,12 @@ async function main() {
   const describe = (s) => (s ? `${s.lines} lines, sha256 ${s.sha256}` : "none");
   console.log(`previous diff: ${describe(previous)}`);
   console.log(`current diff:  ${describe(current)}`);
-  console.log(`PR diff status: ${status}`);
-  if (status === "empty") {
-    console.log(
-      "::warning::The PR has no changes against its merge base; skipping review.",
-    );
-  } else if (status === "emptied") {
-    console.log(
-      "::notice::The PR no longer has any changes against its merge base; " +
-        "Claude will be told.",
-    );
-  }
+  console.log(`PR diff status: ${changed ? "changed" : "unchanged"}`);
 
-  if (skip) {
+  if (!changed) {
     await writeOutput("skip", "true");
   }
+
   if (section) {
     await writeOutput("diff_section", section);
   }

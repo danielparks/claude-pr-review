@@ -77,7 +77,7 @@ Queuing a comment only ever creates a new uniquely-named file, and claiming/mark
 ### Key files
 
 - `cli/pr-review` — the CLI entry point / command dispatch.
-- `cli/pr-diff-check` / `cli/lib/diff-check.js` — the diff check: merge-base diff, normalization, cache comparison, diff-of-diffs. A PR that becomes empty is passed to Claude (not skipped) with a note, and the empty diff becomes the baseline; an empty diff with `changed_files` > 0 fails instead.
+- `cli/pr-diff-check` / `cli/lib/diff-check.js` — the diff check: merge-base diff, normalization, cache comparison, diff-of-diffs. A PR that becomes empty is passed to Claude with a note, and the empty diff becomes the baseline; an empty diff with `changed_files` > 0 fails instead.
 - `cli/action-setup` — runs between the diff check and Claude's turn: queue init, `gh-pr-render`, label fetching, and building `claude_args`.
 - `cli/pr-review-permission-prompt` — the MCP server backing `--permission-prompt-tool`; denies anything outside `allowed-tools`, naming the specific command in the denial message.
 - `cli/lib/queue.js` — the claim/retry state machine described above.

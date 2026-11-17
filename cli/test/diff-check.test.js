@@ -57,8 +57,7 @@ describe("compareAndCache", () => {
   it("reports the first run and saves the baseline", async () => {
     const result = await compareAndCache(patch(10), cache);
     expect(result).toMatchObject({
-      status: "first",
-      skip: false,
+      changed: true,
       section: "",
       previous: null,
     });
@@ -70,16 +69,15 @@ describe("compareAndCache", () => {
   it("skips when a rebase leaves the diff unchanged", async () => {
     await compareAndCache(patch(10), cache);
     const result = await compareAndCache(patch(250), cache);
-    expect(result).toMatchObject({ status: "unchanged", skip: true });
+    expect(result).toMatchObject({ changed: false });
     expect(result.previous).toEqual(result.current);
   });
 
   it("produces a diff-of-diffs when the diff changes", async () => {
     await compareAndCache(patch(10), cache);
     const result = await compareAndCache(patch(10, "!"), cache);
-    expect(result.status).toBe("changed");
-    expect(result.skip).toBe(false);
-    expect(result.section).toMatch(/^## Changes since last review\n```\n/);
+    expect(result.changed).toBe(true);
+    expect(result.section).toMatch(/^## Changes since last review\n\n```\n/);
     expect(result.section).toContain("< +added\n---\n> +added!");
     expect(result.section).toMatch(/\n```$/);
   });
@@ -88,27 +86,38 @@ describe("compareAndCache", () => {
     await compareAndCache(patch(10), cache);
     await compareAndCache(patch(10, "!"), cache);
     const result = await compareAndCache(patch(99, "!"), cache);
-    expect(result.status).toBe("unchanged");
+    expect(result).toMatchObject({ changed: false, section: "" });
   });
 
-  it("skips and saves nothing when the first diff is empty", async () => {
+  it("handles an empty first diff", async () => {
     const result = await compareAndCache("", cache);
-    expect(result).toMatchObject({ status: "empty", skip: true, section: "" });
-    await expect(readFile(join(cache, "prev.patch"), "utf8")).rejects.toThrow(
-      /ENOENT/,
-    );
+    expect(result).toMatchObject({
+      changed: true,
+      previous: null,
+      current: { lines: 0 },
+    });
+    expect(result.section).toContain("now **empty**");
+    expect(result.section).not.toContain("\n- ");
+    expect(result.section).toContain("outdated");
+    await expect(await readFile(join(cache, "prev.patch"), "utf8")).toBe("");
   });
 
-  it("treats the first real diff after an empty first run as a first review", async () => {
+  it("notes the first real diff after an empty first run", async () => {
     await compareAndCache("", cache);
     const result = await compareAndCache(patch(10), cache);
-    expect(result).toMatchObject({ status: "first", skip: false, section: "" });
+    expect(result).toMatchObject({
+      changed: true,
+      previous: { lines: 0 },
+    });
+    expect(result.section).toContain("was **empty**");
+    expect(result.section).not.toContain("\n- ");
+    expect(result.section).toContain("outdated");
   });
 
   it("reports a PR that becomes empty, listing its old files", async () => {
     await compareAndCache(patch(10), cache);
     const result = await compareAndCache("", cache);
-    expect(result).toMatchObject({ status: "emptied", skip: false });
+    expect(result).toMatchObject({ changed: true, current: { lines: 0 } });
     expect(result.section).toContain("now **empty**");
     expect(result.section).toContain("- `f`");
     expect(result.section).toContain("outdated");
@@ -119,14 +128,14 @@ describe("compareAndCache", () => {
     await compareAndCache("", cache);
     expect(await readFile(join(cache, "prev.patch"), "utf8")).toBe("");
     const result = await compareAndCache("", cache);
-    expect(result).toMatchObject({ status: "unchanged", skip: true });
+    expect(result).toMatchObject({ changed: false });
   });
 
   it("says everything is new when a PR is refilled after being empty", async () => {
     await compareAndCache(patch(10), cache);
     await compareAndCache("", cache);
     const result = await compareAndCache(patch(10), cache);
-    expect(result).toMatchObject({ status: "refilled", skip: false });
+    expect(result).toMatchObject({ changed: true, previous: { lines: 0 } });
     expect(result.section).toContain("**empty** at the last review");
     expect(result.section).toContain("outdated");
     expect(result.section).not.toContain("```");
@@ -135,6 +144,6 @@ describe("compareAndCache", () => {
   it("ignores a cache directory left by something else", async () => {
     await writeFile(join(dir, "unrelated"), "x");
     const result = await compareAndCache(patch(10), cache);
-    expect(result.status).toBe("first");
+    expect(result).toMatchObject({ changed: true, previous: null });
   });
 });
