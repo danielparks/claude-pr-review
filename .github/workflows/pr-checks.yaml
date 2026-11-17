@@ -26,8 +26,8 @@ jobs:
     timeout-minutes: 10
     env:
       # Update via `scripts/update-pinned-tools`, not by hand.
-      ACTIONLINT_VERSION: v1.14.0
-      GHALINT_VERSION: v1.5.6
+      ACTIONLINT_VERSION: v1.17.1
+      GHALINT_VERSION: v1.6.0
     permissions:
       security-events: write # reporting lint failures
     steps:

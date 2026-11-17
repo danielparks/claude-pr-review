@@ -4,4 +4,4 @@
 # so `npm run format` and this script format identically;
 # `scripts/update-pinned-tools` bumps both.
 
-npm exec --yes --prefix "$(mktemp -d)" --package=oxfmt@0.78.0 -- oxfmt "$@"
+npm exec --yes --prefix "$(mktemp -d)" --package=oxfmt@0.79.0 -- oxfmt "$@"
