@@ -1,11 +1,8 @@
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
+import { buildSection, parseFiles } from "./diff-section.js";
 import { countLines } from "./util.js";
-
-const execFileAsync = promisify(execFile);
 
 /**
  * Normalize a patch so that a clean rebase produces an identical result.
@@ -40,31 +37,13 @@ async function readIfExists(path) {
   }
 }
 
-/**
- * `diff` exits 1 when the files differ, which isn't an error here.
- */
-async function textDiff(prevPath, newPath) {
-  try {
-    return (await execFileAsync("diff", [prevPath, newPath])).stdout;
-  } catch (error) {
-    if (error.code === 1) {
-      return error.stdout;
-    }
-    throw error;
-  }
-}
-
 const OUTDATED_NOTE =
   "Earlier inline comments on code that changed may now be marked outdated. " +
   "That does not mean the issue was fixed, so check each one against the " +
   "current code.";
 
-function changedPaths(patch) {
-  return [...patch.matchAll(/^diff --git a\/.* b\/(.*)$/gm)].map((m) => m[1]);
-}
-
 function emptiedSection(prev) {
-  const paths = changedPaths(prev);
+  const paths = [...parseFiles(prev).keys()];
   return [
     "## Changes since last review",
     "",
@@ -126,13 +105,7 @@ export async function compareAndCache(rawPatch, cachePath) {
   } else if (result.previous?.lines === 0) {
     result.section = refilledSection();
   } else if (result.changed && result.previous) {
-    result.section = [
-      "## Changes since last review",
-      "",
-      "```",
-      (await textDiff(prevPath, newPath)).replace(/\n$/, ""),
-      "```",
-    ].join("\n");
+    result.section = await buildSection(prev, current);
   }
 
   await rename(newPath, prevPath);

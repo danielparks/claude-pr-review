@@ -77,9 +77,10 @@ describe("compareAndCache", () => {
     await compareAndCache(patch(10), cache);
     const result = await compareAndCache(patch(10, "!"), cache);
     expect(result.changed).toBe(true);
-    expect(result.section).toMatch(/^## Changes since last review\n\n```\n/);
-    expect(result.section).toContain("< +added\n---\n> +added!");
-    expect(result.section).toMatch(/\n```$/);
+    expect(result.section).toMatch(/^## Changes since last review\n\n/);
+    expect(result.section).toContain("### `f`");
+    expect(result.section).toContain("@@ function foo() {");
+    expect(result.section).toContain("< +added\n> +added!");
   });
 
   it("uses the changed diff as the next baseline", async () => {
