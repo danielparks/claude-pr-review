@@ -50,15 +50,13 @@ update_version() {
     return
   fi
 
-  tmp=$(mktemp)
+  tmp=$(mktemp "${FILE}.new-XXXXXXXX.local")
   # $current contains . but it will likely match correctly because of $var
   sed "s/${var}: ${current}/${var}: ${latest}/" "$FILE" > "$tmp"
+  chmod 0644 "$tmp"
   mv "$tmp" "$FILE"
   echo "Updated ${var}: ${current} -> ${latest}"
 }
-
-update_version ACTIONLINT_VERSION kjanat/actionlint
-update_version GHALINT_VERSION suzuki-shunsuke/ghalint
 
 update_oxfmt() {
   local current latest tmp
@@ -74,9 +72,12 @@ update_oxfmt() {
     return
   fi
 
-  sed -i.bak "s/--package=oxfmt@${current} /--package=oxfmt@${latest} /" \
-    scripts/format
-  rm scripts/format.bak
+  tmp=$(mktemp scripts/format.new-XXXXXXXX.local)
+  sed "s/--package=oxfmt@${current} /--package=oxfmt@${latest} /" \
+    scripts/format > "$tmp"
+  chmod 0755 "$tmp"
+  mv "$tmp" scripts/format
+
   # Updates cli/package.json and cli/package-lock.json without touching
   # node_modules.
   (cd cli && npm install --package-lock-only --save-dev --save-exact \
@@ -84,4 +85,6 @@ update_oxfmt() {
   echo "Updated oxfmt: ${current} -> ${latest}"
 }
 
+update_version ACTIONLINT_VERSION kjanat/actionlint
+update_version GHALINT_VERSION suzuki-shunsuke/ghalint
 update_oxfmt
