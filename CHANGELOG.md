@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
   - It now handles an empty PR diff explicitly. If GitHub reports changed files then it fails, otherwise it explicitly informs Claude the diff is empty.
 - Updated [gh-pr-render] to version 0.7.0 in order to trim diff context for inline comments.
 - Rewrote the “Changes since last review” section that Claude sees on a re-review. It now groups changes by file, labels each with the enclosing function or section, and marks lines `<` (in the previous diff) and `>` (in the current diff) instead of using bare `diff` line numbers that referred to nothing in the repo. Files that appear or disappear are listed with their sizes. Output is capped — long groups, large files, and long file lists are truncated or summarized — so an earlier push that contained something huge can no longer make it larger than the PR itself.
+- Switched to saving the raw PR diff in the cache rather than a normalized one, since the normalization function can change from version to version.
 
 [gh-pr-render]: https://github.com/danielparks/gh-pr-render
 

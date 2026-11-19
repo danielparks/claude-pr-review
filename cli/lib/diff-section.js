@@ -28,8 +28,6 @@ const PREAMBLE =
 
 /**
  * Split a normalized patch into per-file lists of lines, keyed by path.
- *
- * Hunk headers are reduced to `@@ <function context>`.
  */
 export function parseFiles(patch) {
   const files = new Map();
@@ -37,10 +35,11 @@ export function parseFiles(patch) {
   for (const line of patch.split("\n")) {
     const match = /^diff --git a\/.* b\/(.*)$/.exec(line);
     if (match) {
-      lines = [];
+      lines = [line];
       files.set(match[1], lines);
+    } else if (lines) {
+      lines.push(line);
     }
-    lines?.push(line.replace(/^@@ - - @@ ?/, "@@ ").trimEnd());
   }
   return files;
 }

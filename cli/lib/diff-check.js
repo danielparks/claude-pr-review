@@ -12,10 +12,13 @@ import { countLines } from "./util.js";
  * don't.
  */
 export function normalizePatch(patch) {
+  if (patch == null) {
+    return patch;
+  }
   return patch
     .split("\n")
     .filter((line) => !line.startsWith("index "))
-    .map((line) => line.replace(/^@@.*@@/, "@@ - - @@"))
+    .map((line) => line.replace(/^@@.+@@/, "@@"))
     .join("\n");
 }
 
@@ -84,28 +87,28 @@ function refilledSection() {
  * Callers must rule out an empty patch caused by a bad checkout or merge base
  * *before* calling this, because it saves the baseline.
  */
-export async function compareAndCache(rawPatch, cachePath) {
+export async function compareAndCache(rawDiff, cachePath) {
   await mkdir(cachePath, { recursive: true });
   const prevPath = join(cachePath, "prev.patch");
   const newPath = join(cachePath, "new.patch");
+  await writeFile(newPath, rawDiff);
 
-  const current = normalizePatch(rawPatch);
-  await writeFile(newPath, current);
-  const prev = await readIfExists(prevPath);
+  const currentDiff = normalizePatch(rawDiff);
+  const prevDiff = normalizePatch(await readIfExists(prevPath));
 
   const result = {
-    changed: prev !== current,
-    previous: prev === null ? null : summarize(prev),
-    current: summarize(current),
+    changed: prevDiff !== currentDiff,
+    previous: prevDiff === null ? null : summarize(prevDiff),
+    current: summarize(currentDiff),
     section: "",
   };
 
   if (result.current.lines === 0) {
-    result.section = emptiedSection(prev ?? "");
+    result.section = emptiedSection(prevDiff ?? "");
   } else if (result.previous?.lines === 0) {
     result.section = refilledSection();
   } else if (result.changed && result.previous) {
-    result.section = await buildSection(prev, current);
+    result.section = await buildSection(prevDiff, currentDiff);
   }
 
   await rename(newPath, prevPath);

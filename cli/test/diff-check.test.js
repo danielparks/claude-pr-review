@@ -23,7 +23,7 @@ describe("normalizePatch", () => {
         "diff --git a/f b/f",
         "--- a/f",
         "+++ b/f",
-        "@@ - - @@ function foo() {",
+        "@@ function foo() {",
         " context",
         "+added",
         "",
@@ -61,9 +61,7 @@ describe("compareAndCache", () => {
       section: "",
       previous: null,
     });
-    expect(await readFile(join(cache, "prev.patch"), "utf8")).toBe(
-      normalizePatch(patch(10)),
-    );
+    expect(await readFile(join(cache, "prev.patch"), "utf8")).toBe(patch(10));
   });
 
   it("skips when a rebase leaves the diff unchanged", async () => {
