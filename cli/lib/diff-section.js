@@ -84,7 +84,7 @@ async function normalDiff(oldLines, newLines) {
     await writeFile(newPath, newLines.join("\n") + "\n");
     try {
       return (
-        await execFileAsync("diff", [oldPath, newPath], {
+        await execFileAsync("diff", ["-d", oldPath, newPath], {
           maxBuffer: 1024 * 1024 * 1024,
         })
       ).stdout;
