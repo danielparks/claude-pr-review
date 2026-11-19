@@ -149,11 +149,11 @@ describe("buildSection", () => {
     expect(section).toContain("Changes too large to show here");
     expect(section).toContain("- `big.js` (400 lines differ)");
     expect(section).toContain("### `s.js`");
-    expect(section.length).toBeLessThan(LIMITS.totalBytes);
+    expect(section.length).toBeLessThan(LIMITS.totalChars);
   });
 
   it("stops showing details once the total limit is reached", async () => {
-    const perFile = Math.floor(LIMITS.fileBytes / 4);
+    const perFile = Math.floor(LIMITS.fileChars / 4);
     const lines = (prefix) => [`+${prefix}${"x".repeat(perFile)}`];
     const names = Array.from({ length: 10 }, (_, i) => `f${i}.js`);
     const section = await buildSection(
@@ -165,7 +165,7 @@ describe("buildSection", () => {
     expect(shown.length).toBeGreaterThan(0);
     expect(summarized.length).toBeGreaterThan(0);
     expect(shown.length + summarized.length).toBe(names.length);
-    expect(section.length).toBeLessThan(LIMITS.totalBytes + 2000);
+    expect(section.length).toBeLessThan(LIMITS.totalChars + 2000);
   });
 
   it("uses a longer fence when the content contains backticks", async () => {

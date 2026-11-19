@@ -14,9 +14,9 @@ export const LIMITS = {
   /** Most lines shown on each side (`<` or `>`) of one group of changes. */
   groupLines: 30,
   /** Largest rendered size of one file's changes before it's summarized. */
-  fileBytes: 6000,
+  fileChars: 6000,
   /** Largest total size of the section's file details. */
-  totalBytes: 20000,
+  totalChars: 20000,
   /** Most files named in each list (added, removed, or summarized). */
   listedFiles: 25,
 };
@@ -216,8 +216,8 @@ export async function buildSection(prev, current) {
       continue;
     }
     if (
-      rendered.text.length > LIMITS.fileBytes ||
-      total + rendered.text.length > LIMITS.totalBytes
+      rendered.text.length > LIMITS.fileChars ||
+      total + rendered.text.length > LIMITS.totalChars
     ) {
       summarized.push(`- \`${path}\` (${rendered.differing} lines differ)`);
     } else {
