@@ -20,6 +20,9 @@ All notable changes to this project will be documented in this file.
 - Moved the diff check from inline shell in `action.yaml` into a tested script (`cli/pr-diff-check`).
   - It now logs the merge base and the size and checksum of the current and previous diffs.
   - It now handles an empty PR diff explicitly. If GitHub reports changed files then it fails, otherwise it explicitly informs Claude the diff is empty.
+- Updated [gh-pr-render] to version 0.7.0 in order to trim diff context for inline comments.
+
+[gh-pr-render]: https://github.com/danielparks/gh-pr-render
 
 ## Release 2.0.0 (2026-11-07)
 
