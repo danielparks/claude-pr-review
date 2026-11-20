@@ -24,11 +24,14 @@ const toTrimmedBuffer = (text) => toBuffer(text.trimEnd());
  * keeping the start (titles, descriptions) and favoring the end (the most
  * recent activity). `markerForElision(omitted)` makes the marker left in the gap.
  *
+ * If `budget` is too small even for the marker, the marker alone is returned,
+ * which exceeds `budget`; the caller has to check the total.
+ *
  * This cuts only at newlines, which never occur inside a multi-byte UTF-8
  * character, so each piece decodes cleanly.
  */
 export function truncateMiddle(buf, budget, markerForElision) {
-  if (buf.length <= budget) {
+  if (!buf.length || buf.length <= budget) {
     return buf;
   }
   // The marker's size depends on how much is omitted, so reserve room for the
@@ -59,7 +62,9 @@ export function truncateMiddle(buf, budget, markerForElision) {
  *
  * The header, prompt, additional prompt, and labels are never cut: if they
  * alone are too big that's a configuration problem and this throws. The
- * discussion is shrunk first, then the diff of diffs.
+ * discussion is shrunk first, then the diff of diffs. If the result still
+ * can't fit (the fixed parts leave too little room even for the markers), that
+ * throws too.
  *
  * `paths` says where the complete text of the discussion and diff of diffs are
  * saved; the marker left in a shrunk section points Claude there. Returns the
@@ -120,5 +125,13 @@ export function assemblePrompt(
       .flatMap((buf) => [SEPARATOR, buf])
       .slice(1),
   ).toString("utf8");
+  const size = Buffer.byteLength(text);
+  if (size > maxBytes) {
+    fail(
+      `The prompt is ${size} bytes even with the discussion and diff of ` +
+        `diffs cut down, over the ${maxBytes} byte limit. Shorten \`prompt\` ` +
+        "or `additional-prompt`.",
+    );
+  }
   return { text, shrunk };
 }

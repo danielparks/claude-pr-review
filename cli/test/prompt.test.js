@@ -51,6 +51,11 @@ describe("truncateMiddle", () => {
     expect(bytes(kept) + omitted).toBe(bytes(text));
   });
 
+  it("leaves an empty buffer alone even with a negative budget", () => {
+    const empty = buf("");
+    expect(truncateMiddle(empty, -5, () => "[gap]")).toBe(empty);
+  });
+
   it("copes with a budget too small for any lines", () => {
     const out = truncateMiddle(buf(lines(100)), 10, () => "[gap]").toString();
     expect(out).toBe("[gap]\n");
@@ -101,6 +106,18 @@ describe("assemblePrompt", () => {
     expect(bytes(text)).toBeLessThanOrEqual(2000);
     expect(text).toContain("/tmp/diff.md");
     expect(text).toContain("short");
+  });
+
+  it("fails if even the markers don't fit", () => {
+    // The fixed parts fit, but leave no room for a section or its marker.
+    const fixedBytes = bytes("REPO: o/r\nPR NUMBER: 1\n\nReview this.");
+    expect(() =>
+      assemblePrompt(
+        parts({ discussion: lines(1000) }),
+        paths,
+        fixedBytes + 10,
+      ),
+    ).toThrow(/even with the discussion and diff of diffs cut down/);
   });
 
   it("does not modify its input", () => {
