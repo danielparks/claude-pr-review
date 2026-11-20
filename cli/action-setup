@@ -2,8 +2,9 @@
 
 // Runs between the diff check and Claude's turn: sets up the environment,
 // renders the PR discussion, builds the allowed-tools list, fetches available
-// labels, assembles the prompt within a size limit, and writes claude_args. Outputs land in $GITHUB_OUTPUT and
-// $GITHUB_ENV/$GITHUB_PATH for subsequent steps.
+// labels, assembles the prompt within a size limit, and writes claude_args.
+//
+// Writes to $GITHUB_OUTPUT and $GITHUB_ENV/$GITHUB_PATH for subsequent steps.
 
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
