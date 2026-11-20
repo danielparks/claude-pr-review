@@ -2,13 +2,14 @@
 
 // Runs between the diff check and Claude's turn: sets up the environment,
 // renders the PR discussion, builds the allowed-tools list, fetches available
-// labels, and writes claude_args. Outputs land in $GITHUB_OUTPUT and
+// labels, assembles the prompt within a size limit, and writes claude_args. Outputs land in $GITHUB_OUTPUT and
 // $GITHUB_ENV/$GITHUB_PATH for subsequent steps.
 
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fetchAndWriteLabels } from "./lib/labels.js";
+import { assemblePrompt } from "./lib/prompt.js";
 import { actionContext, writeOutput } from "./lib/util.js";
 
 const execFileAsync = promisify(execFile);
@@ -41,10 +42,7 @@ async function main() {
 
   // Install gh-pr-render and save its output for Claude's prompt.
   await run("npm", "install", "-g", `gh-pr-render@${renderVersion}`);
-  await writeOutput(
-    "pr_context",
-    (await run("gh-pr-render", `${owner}/${repo}`, pr)).stdout.trimEnd(),
-  );
+  const discussion = (await run("gh-pr-render", `${owner}/${repo}`, pr)).stdout;
 
   // Build the comma-separated allowed-tools list, stripping blank lines and
   // comment lines.
@@ -57,14 +55,30 @@ async function main() {
   // pr-review's label subcommands can enforce the allowlist.
   await fetchAndWriteLabels(token, owner, repo, labelsPatterns);
 
-  if (labelsPatterns.trim()) {
-    await writeOutput(
-      "label_context",
-      (
-        await run("node", `${cliDir}/pr-review`, "list-available-labels")
-      ).stdout.trimEnd(),
-    );
+  const labels = labelsPatterns.trim()
+    ? (await run("node", `${cliDir}/pr-review`, "list-available-labels")).stdout
+    : "";
+
+  // Assemble the whole prompt here so its total size can be limited; see
+  // `MAX_PROMPT_BYTES`. Whatever gets cut is saved in full for Claude to read.
+  const paths = {
+    discussion: "/tmp/pr-discussion.md",
+    diffOfDiffs: "/tmp/pr-diff-of-diffs.md",
+  };
+  const parts = {
+    header: `REPO: ${owner}/${repo}\nPR NUMBER: ${pr}`,
+    prompt: process.env.PROMPT || "",
+    additionalPrompt: process.env.ADDITIONAL_PROMPT || "",
+    labels,
+    diffOfDiffs: process.env.DIFF_SECTION || "",
+    discussion,
+  };
+  const { text, shrunk } = assemblePrompt(parts, paths);
+  for (const name of shrunk) {
+    console.log(`Prompt too long; shortened ${name}, full text in ${paths[name]}`);
+    await writeFile(paths[name], parts[name].trimEnd() + "\n");
   }
+  await writeOutput("prompt", text);
 
   // Build claude_args for claude-code-action.
   // claude-code-action parses claude_args with shell-quote, so each

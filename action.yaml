@@ -226,6 +226,9 @@ runs:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         RENDER_VERSION: ${{ inputs.gh-pr-render-version }}
         AVAILABLE_LABELS_PATTERNS: ${{ inputs.available-labels }}
+        PROMPT: ${{ inputs.prompt }}
+        ADDITIONAL_PROMPT: ${{ inputs.additional-prompt }}
+        DIFF_SECTION: ${{ steps.diff.outputs.diff_section }}
         ALLOWED_TOOLS: |
           ${{ inputs.allowed-tools }}
           ${{ inputs.additional-allowed-tools }}
@@ -237,18 +240,7 @@ runs:
       with:
         anthropic_api_key: ${{ inputs.anthropic-api-key }}
         claude_code_oauth_token: ${{ inputs.claude-code-oauth-token }}
-        prompt: |
-          REPO: ${{ github.repository }}
-          PR NUMBER: ${{ github.event.pull_request.number }}
-
-          ${{ inputs.prompt }}
-          ${{ inputs.additional-prompt }}
-
-          ${{ steps.setup.outputs.label_context }}
-
-          ${{ steps.diff.outputs.diff_section }}
-
-          ${{ steps.setup.outputs.pr_context }}
+        prompt: ${{ steps.setup.outputs.prompt }}
         claude_args: ${{ steps.setup.outputs.value }}
 
     - name: Submit any review comments Claude queued but didn't post
